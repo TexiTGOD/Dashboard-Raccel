@@ -88,7 +88,16 @@ supabase secrets set --env-file supabase/functions/.env
 supabase functions deploy manychat-webhook calendly-webhook fathom-webhook hotmart-webhook
 ```
 
-Las funciones quedan en `https://<PROJECT_REF>.functions.supabase.co/<nombre>`.
+Las funciones quedan en `https://<PROJECT_REF>.supabase.co/functions/v1/<nombre>`.
+
+Smoke test:
+
+```bash
+curl -s -X POST https://<PROJECT_REF>.supabase.co/functions/v1/manychat-webhook \
+  -H "content-type: application/json" \
+  -H "x-webhook-secret: <WEBHOOK_SECRET>" \
+  -d '{"manychat_contact_id":"smoke_001","ig_username":"@Prueba","pieza_origen":"REEL_0101","conciencia":4}'
+```
 
 ## Configuración de cada conector
 
