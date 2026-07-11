@@ -74,7 +74,13 @@ export function ManualSaleForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 space-y-1.5">
           <Label htmlFor="s-email">Email comprador</Label>
-          <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            id="s-email"
+            type="email"
+            className="font-mono"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label htmlFor="s-nombre">Nombre comprador</Label>
@@ -85,6 +91,7 @@ export function ManualSaleForm({
           <Input
             id="s-monto"
             inputMode="decimal"
+            className="font-mono"
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
             placeholder="1497"
@@ -92,7 +99,12 @@ export function ManualSaleForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="s-moneda">Moneda</Label>
-          <Input id="s-moneda" value={moneda} onChange={(e) => setMoneda(e.target.value)} />
+          <Input
+            id="s-moneda"
+            className="font-mono"
+            value={moneda}
+            onChange={(e) => setMoneda(e.target.value)}
+          />
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label>Método de pago</Label>
@@ -108,7 +120,7 @@ export function ManualSaleForm({
         </div>
       </div>
       <div className="flex gap-2">
-        <Button onClick={submit} disabled={pending}>
+        <Button variant="outline" onClick={submit} disabled={pending}>
           {pending ? "Cargando…" : "Guardar venta"}
         </Button>
         <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>

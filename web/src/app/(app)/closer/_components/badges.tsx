@@ -1,19 +1,32 @@
 import { Badge } from "@/components/ui/badge";
 import type { EstadoBooking, ResultadoCall } from "@/lib/types";
 
-const estadoCls: Record<string, string> = {
-  programada: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300",
-  atendida: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300",
-  no_show: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300",
-  reprogramada: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-300",
-  cancelada: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-300",
+// Badge del sistema: 1px borde semántico + texto semántico + fill transparente.
+// Nunca sólido. El estado siempre lleva su palabra (nunca solo color).
+const badgeBase =
+  "rounded-full border bg-transparent px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em]";
+
+const semantic: Record<string, string> = {
+  success: "border-success text-success",
+  warning: "border-warning text-warning",
+  danger: "border-danger text-danger",
+  info: "border-info text-info",
+  neutral: "border-border text-muted-foreground",
 };
 
-const resultadoCls: Record<string, string> = {
-  vendido: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300",
-  perdido: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-300",
-  follow_up: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300",
-  pendiente: "bg-muted text-muted-foreground",
+const estadoColor: Record<string, keyof typeof semantic> = {
+  programada: "info",
+  atendida: "info",
+  reprogramada: "warning",
+  no_show: "danger",
+  cancelada: "danger",
+};
+
+const resultadoColor: Record<string, keyof typeof semantic> = {
+  vendido: "success",
+  follow_up: "warning",
+  perdido: "danger",
+  pendiente: "neutral",
 };
 
 const resultadoLabel: Record<string, string> = {
@@ -26,7 +39,7 @@ const resultadoLabel: Record<string, string> = {
 export function EstadoBadge({ estado }: { estado: EstadoBooking | null }) {
   if (!estado) return null;
   return (
-    <Badge variant="outline" className={estadoCls[estado] ?? ""}>
+    <Badge variant="outline" className={`${badgeBase} ${semantic[estadoColor[estado] ?? "neutral"]}`}>
       {estado.replace("_", " ")}
     </Badge>
   );
@@ -35,7 +48,7 @@ export function EstadoBadge({ estado }: { estado: EstadoBooking | null }) {
 export function ResultadoBadge({ resultado }: { resultado: ResultadoCall | null }) {
   if (!resultado) return null;
   return (
-    <Badge variant="outline" className={resultadoCls[resultado] ?? ""}>
+    <Badge variant="outline" className={`${badgeBase} ${semantic[resultadoColor[resultado] ?? "neutral"]}`}>
       {resultadoLabel[resultado] ?? resultado}
     </Badge>
   );

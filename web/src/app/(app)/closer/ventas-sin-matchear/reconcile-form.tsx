@@ -52,7 +52,7 @@ export function ReconcileForm({
           )}
         </SelectContent>
       </Select>
-      <Button onClick={submit} disabled={pending}>
+      <Button variant="outline" onClick={submit} disabled={pending}>
         {pending ? "Vinculando…" : "Vincular"}
       </Button>
     </div>

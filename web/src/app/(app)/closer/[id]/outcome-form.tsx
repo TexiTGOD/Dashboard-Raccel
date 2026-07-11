@@ -97,9 +97,11 @@ export function OutcomeForm({
         />
       </div>
 
-      <Button onClick={save} disabled={pending} className="w-full sm:w-auto">
-        {pending ? "Guardando…" : "Guardar desenlace"}
-      </Button>
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={pending}>
+          {pending ? "Guardando…" : "Guardar desenlace"}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -22,17 +22,17 @@ function BookingCard({ b }: { b: Row }) {
   const resultado = b.calls?.[0]?.resultado ?? null;
   return (
     <Link href={`/closer/${b.id}`} className="block">
-      <Card className="transition-colors hover:bg-muted/50">
-        <CardContent className="flex items-center gap-3 py-3">
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{nombre}</div>
-            <div className="truncate text-sm text-muted-foreground">
+      <Card className="gap-0 py-0 transition-colors duration-150 hover:border-primary/40 hover:bg-[var(--neon-wash)]">
+        <CardContent className="flex items-start gap-4 px-5 py-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="truncate font-medium text-foreground">{nombre}</div>
+            <div className="truncate font-mono text-[13px] text-muted-foreground">
               {ig ? `@${ig}` : "—"}
-              {b.lead?.pieza_origen ? ` · ${b.lead.pieza_origen}` : ""}
+              {b.lead?.pieza_origen ? `  ·  ${b.lead.pieza_origen}` : ""}
             </div>
-            <div className="mt-0.5 text-xs text-muted-foreground">{fmtFecha(b.fecha_llamada)}</div>
+            <div className="font-mono text-xs text-[var(--text-muted)]">{fmtFecha(b.fecha_llamada)}</div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
             <EstadoBadge estado={b.estado} />
             {resultado && resultado !== "pendiente" && <ResultadoBadge resultado={resultado} />}
           </div>
@@ -40,6 +40,10 @@ function BookingCard({ b }: { b: Row }) {
       </Card>
     </Link>
   );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="section-title mb-3 border-b border-border pb-2">{children}</h2>;
 }
 
 export default async function CloserPage() {
@@ -60,13 +64,13 @@ export default async function CloserPage() {
   const pasadas = bookings.filter((b) => t(b) < now).reverse();
 
   return (
-    <div className="space-y-6">
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Próximas</h2>
+    <div className="space-y-10">
+      <section>
+        <SectionTitle>Próximas</SectionTitle>
         {proximas.length === 0 ? (
           <p className="text-sm text-muted-foreground">No tenés llamadas próximas.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {proximas.map((b) => (
               <BookingCard key={b.id} b={b} />
             ))}
@@ -74,12 +78,12 @@ export default async function CloserPage() {
         )}
       </section>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Recientes</h2>
+      <section>
+        <SectionTitle>Recientes</SectionTitle>
         {pasadas.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay llamadas pasadas.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {pasadas.map((b) => (
               <BookingCard key={b.id} b={b} />
             ))}

@@ -13,3 +13,6 @@ supabase/functions/.env
 
 # Supabase
 supabase/.temp/
+
+# tooling local
+.claude/
