@@ -113,10 +113,19 @@ validado contra `HOTMART_HOTTOK`).
   `econ_calificacion`, `estado_funnel`, `feedback_descalificada`.
 - Recalificación: se actualiza el lead **sin pisar** `conciencia` ni `pieza_origen`.
 
-### 2. Calendly → `calendly-webhook` (vía Zapier)
-- Trigger Zapier: *Invitee Created* / *Invitee Canceled* → acción Webhooks `POST` con header.
-- Body: `calendly_event_id` (obligatorio), `ig_username` (viene del `?a1={{instagram_username}}`),
-  `email`, `nombre`, `closer`, `fecha_llamada`, `estado` (o `canceled: true`).
+### 2. Calendly → `calendly-webhook` (webhook NATIVO, sin Zapier)
+- Se registra la suscripción nativa de Calendly con `scripts/register-calendly-webhook.sh`
+  (necesita un Personal Access Token de Calendly en `CALENDLY_PAT`). Eventos
+  `invitee.created` + `invitee.canceled`, scope organización.
+- Auth: **no** usa `x-webhook-secret` (Calendly no manda headers custom). Valida la firma
+  nativa (header `Calendly-Webhook-Signature`) con el `signing_key` de la suscripción,
+  guardado como secret `CALENDLY_SIGNING_KEY`.
+- Parseo del payload nativo (anidado): `calendly_event_id` = UUID de `payload.scheduled_event.uri`;
+  `ig_username` sale de `payload.questions_and_answers` (pregunta del Instagram, prefillada por
+  `?a1={{instagram_username}}`); `email`/`nombre` de `payload`; `closer` del host
+  (`event_memberships[0].user_email`); `fecha_llamada` de `scheduled_event.start_time`.
+- `invitee.canceled` actualiza el booking existente (`estado = cancelada`) por
+  `calendly_event_id`, sin duplicar.
 
 ### 3. Fathom → `fathom-webhook` (vía Zapier)
 - Trigger Zapier: *New AI Summary* → acción Webhooks `POST` con header.
