@@ -52,27 +52,91 @@ export async function saveCallOutcome(input: {
   return { ok: true };
 }
 
-// Carga manual de una venta linkeada al lead/booking del contexto.
+// Carga manual de una venta (el TRATO) + su primer pago.
+// sale = valor del contrato (facturación); payment = la plata que entró.
 export async function createManualSale(input: {
   bookingId: string;
   leadId: string | null;
   email_comprador: string;
   nombre_comprador: string;
+  producto: string;
+  valor_contrato: number;
+  cuotas_total: number;
+  moneda: string;
+  primer_pago_monto: number;
+  primer_pago_metodo: MetodoPago;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const moneda = input.moneda || "USD";
+
+  // closer_identifier del profile logueado (para atribuir la venta).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let closer: string | null = null;
+  if (user) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("closer_identifier")
+      .eq("id", user.id)
+      .maybeSingle();
+    closer = prof?.closer_identifier ?? null;
+  }
+
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .insert({
+      email_comprador: input.email_comprador || null,
+      nombre_comprador: input.nombre_comprador || null,
+      producto: input.producto || null,
+      valor_contrato: input.valor_contrato,
+      monto: input.valor_contrato, // legacy: espejo de la facturación
+      cuotas_total: input.cuotas_total,
+      tipo: "nueva",
+      closer,
+      moneda,
+      status: "approved",
+      metodo_pago: input.primer_pago_metodo,
+      booking_id: input.bookingId,
+      lead_id: input.leadId,
+      // matcheada la fija el trigger (booking_id no nulo => true).
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  const { error: pErr } = await supabase.from("payments").insert({
+    sale_id: sale.id,
+    monto: input.primer_pago_monto,
+    moneda,
+    fecha: new Date().toISOString(),
+    metodo_pago: input.primer_pago_metodo,
+    numero_cuota: 1,
+  });
+  if (pErr) return { error: pErr.message };
+
+  revalidatePath(`/closer/${input.bookingId}`);
+  return { ok: true };
+}
+
+// Registra un pago posterior (cuota) contra un sale existente.
+export async function addPayment(input: {
+  bookingId: string;
+  saleId: string;
   monto: number;
   moneda: string;
   metodo_pago: MetodoPago;
+  fecha: string; // ISO
+  numero_cuota: number | null;
 }): Promise<Result> {
   const supabase = await createClient();
-  const { error } = await supabase.from("sales").insert({
-    email_comprador: input.email_comprador || null,
-    nombre_comprador: input.nombre_comprador || null,
+  const { error } = await supabase.from("payments").insert({
+    sale_id: input.saleId,
     monto: input.monto,
     moneda: input.moneda || "USD",
-    status: "approved",
+    fecha: input.fecha || new Date().toISOString(),
     metodo_pago: input.metodo_pago,
-    booking_id: input.bookingId,
-    lead_id: input.leadId,
-    // matcheada la fija el trigger (booking_id no nulo => true).
+    numero_cuota: input.numero_cuota,
   });
   if (error) return { error: error.message };
 

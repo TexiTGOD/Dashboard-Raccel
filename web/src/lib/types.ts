@@ -88,16 +88,34 @@ export interface Call {
   fecha: string | null;
 }
 
+export type TipoVenta = "nueva" | "recompra" | "upsell" | "backend";
+
 export interface Sale {
   id: string;
   hotmart_transaction_id: string | null;
   email_comprador: string | null;
   nombre_comprador: string | null;
   monto: number | null;
+  valor_contrato: number | null; // facturación
+  tipo: TipoVenta;
+  producto: string | null;
+  cuotas_total: number | null;
+  closer: string | null;
   moneda: string | null;
   status: string | null;
   metodo_pago: MetodoPago;
   lead_id: string | null;
   booking_id: string | null;
   matcheada: boolean;
+}
+
+export interface Payment {
+  id: string;
+  sale_id: string;
+  monto: number | null;
+  moneda: string | null;
+  fecha: string | null;
+  metodo_pago: MetodoPago;
+  hotmart_transaction_id: string | null;
+  numero_cuota: number | null;
 }

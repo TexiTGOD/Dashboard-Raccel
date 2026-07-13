@@ -6,14 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EstadoBadge } from "../_components/badges";
 import { OutcomeForm } from "./outcome-form";
 import { ManualSaleForm } from "./manual-sale-form";
+import { AddPaymentForm } from "./add-payment-form";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
-import type { Booking, Call, Lead, Sale } from "@/lib/types";
+import type { Booking, Call, Lead, Payment, Sale } from "@/lib/types";
 
+type SaleWithPayments = Sale & { payments: Payment[] | null };
 type BookingDetail = Booking & {
   lead: Lead | null;
   calls: Call[] | null;
-  sales: Sale[] | null;
+  sales: SaleWithPayments[] | null;
 };
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
@@ -45,7 +47,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
 
   const { data } = await supabase
     .from("bookings")
-    .select("*, lead:leads(*), calls(*), sales(*)")
+    .select("*, lead:leads(*), calls(*), sales(*, payments(*))")
     .eq("id", id)
     .maybeSingle();
 
@@ -54,6 +56,10 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
   const lead = b.lead;
   const call = b.calls?.[0] ?? null;
   const sale = b.sales?.[0] ?? null;
+  const payments = (sale?.payments ?? [])
+    .slice()
+    .sort((a, b) => (a.numero_cuota ?? 999) - (b.numero_cuota ?? 999));
+  const cashCollected = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -134,11 +140,48 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
 
           <Panel title="Venta">
             {sale ? (
-              <div className="grid grid-cols-2 gap-5">
-                <Field label="Monto" mono>{fmtMonto(sale.monto, sale.moneda)}</Field>
-                <Field label="Status" mono>{sale.status}</Field>
-                <Field label="Método" mono>{sale.metodo_pago}</Field>
-                <Field label="Matcheada">{sale.matcheada ? "Sí" : "No"}</Field>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <Field label="Valor contrato" mono>{fmtMonto(sale.valor_contrato, sale.moneda)}</Field>
+                  <Field label="Cash collected" mono>{fmtMonto(cashCollected, sale.moneda)}</Field>
+                  <Field label="Tipo">{sale.tipo}</Field>
+                  <Field label="Producto">{sale.producto}</Field>
+                  <Field label="Cuotas" mono>
+                    {sale.cuotas_total ? `${payments.length}/${sale.cuotas_total}` : String(payments.length)}
+                  </Field>
+                  <Field label="Status" mono>{sale.status}</Field>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="micro-label">Pagos</div>
+                  {payments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin pagos registrados.</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {payments.map((p) => (
+                        <li
+                          key={p.id}
+                          className="flex items-center justify-between gap-3 py-2 font-mono text-sm"
+                        >
+                          <span className="text-muted-foreground">
+                            {p.numero_cuota ? `Cuota ${p.numero_cuota}` : "Pago"} · {p.metodo_pago}
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <span className="text-[var(--text-muted)]">{fmtFecha(p.fecha)}</span>
+                            <span className="text-foreground">{fmtMonto(p.monto, p.moneda)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <AddPaymentForm
+                  bookingId={b.id}
+                  saleId={sale.id}
+                  moneda={sale.moneda ?? "USD"}
+                  nextCuota={payments.length + 1}
+                />
               </div>
             ) : (
               <ManualSaleForm

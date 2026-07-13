@@ -102,11 +102,30 @@ async function main() {
     { booking_id: B["demo_b3"], resultado: "follow_up", notas_closer: "Quedó en pensarlo, re-agendar en 3 días.", fecha: dias(-3) },
   ]);
 
-  console.log("6) Sales…");
+  console.log("6) Sales + payments…");
   // Matcheada: mismo email que el booking demo_b2 -> el trigger la vincula sola.
-  await sb.from("sales").insert({ email_comprador: "bea@demo.com", nombre_comprador: "Bea Demo", monto: 1497, moneda: "USD", status: "approved", metodo_pago: "transferencia" });
-  // Sin matchear: email que no coincide con ninguna agenda.
-  await sb.from("sales").insert({ email_comprador: "otramail@gmail.com", nombre_comprador: "Compradora Anónima", monto: 1497, moneda: "USD", status: "approved", metodo_pago: "hotmart" });
+  // Contrato de 1497 en 2 cuotas; primer pago hecho (cash collected parcial).
+  const { data: saleBea } = await sb
+    .from("sales")
+    .insert({
+      email_comprador: "bea@demo.com", nombre_comprador: "Bea Demo",
+      producto: "Programa Claridad", valor_contrato: 1497, monto: 1497,
+      cuotas_total: 2, tipo: "nueva", closer: CLOSER_ID,
+      moneda: "USD", status: "approved", metodo_pago: "transferencia",
+    })
+    .select("id")
+    .single();
+  await sb.from("payments").insert({
+    sale_id: saleBea.id, monto: 750, moneda: "USD", fecha: dias(-1),
+    metodo_pago: "transferencia", numero_cuota: 1,
+  });
+  // Sin matchear: email que no coincide con ninguna agenda (queda para conciliar).
+  await sb.from("sales").insert({
+    email_comprador: "otramail@gmail.com", nombre_comprador: "Compradora Anónima",
+    producto: "Programa Claridad", valor_contrato: 1497, monto: 1497,
+    cuotas_total: 1, tipo: "nueva",
+    moneda: "USD", status: "approved", metodo_pago: "hotmart",
+  });
 
   console.log("\n✓ Seed completo.");
   console.log("   Login admin :  admin@raccel.test");
