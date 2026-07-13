@@ -21,7 +21,10 @@ import { AttributionTable } from "./_components/attribution-table";
 import { MetasEditor } from "./_components/metas-editor";
 import { GastosForm } from "./_components/gastos-form";
 
-const usd = (n: number) => fmtMonto(n, "USD");
+const usd = (n: number | null) => fmtMonto(n, "USD");
+const num = (v: unknown): number | null => (v == null ? null : Number(v));
+// close rate / show rate confiable solo con base suficiente (1.9)
+const MIN_N = 5;
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="section-title mb-3 border-b border-border pb-2">{children}</h2>;
@@ -57,15 +60,19 @@ export default async function OperacionesPage({
     agendas: Number(kr.agendas ?? 0),
     atendidas: Number(kr.atendidas ?? 0),
     no_show: Number(kr.no_show ?? 0),
+    resueltas: Number(kr.resueltas ?? 0),
+    pendientes: Number(kr.pendientes ?? 0),
+    canceladas: Number(kr.canceladas ?? 0),
     ventas: Number(kr.ventas ?? 0),
+    ventas_atribuibles: Number(kr.ventas_atribuibles ?? 0),
     facturacion: Number(kr.facturacion ?? 0),
     cash_collected: Number(kr.cash_collected ?? 0),
-    aov: Number(kr.aov ?? 0),
-    tasa_calificacion: Number(kr.tasa_calificacion ?? 0),
-    tasa_agenda: Number(kr.tasa_agenda ?? 0),
-    show_rate: Number(kr.show_rate ?? 0),
-    close_rate_atendidas: Number(kr.close_rate_atendidas ?? 0),
-    close_rate_agendadas: Number(kr.close_rate_agendadas ?? 0),
+    aov: num(kr.aov),
+    tasa_calificacion: num(kr.tasa_calificacion),
+    tasa_agenda: num(kr.tasa_agenda),
+    show_rate: num(kr.show_rate),
+    close_rate_atendidas: num(kr.close_rate_atendidas),
+    close_rate_agendadas: num(kr.close_rate_agendadas),
   };
 
   const metas = (metasRes.data ?? []) as { metrica: string; objetivo: number }[];
@@ -86,14 +93,14 @@ export default async function OperacionesPage({
   );
 
   const dolores = (dolorRes.data ?? []) as {
-    dolor: string; leads: number; agendas: number; ventas: number; close_rate: number;
+    dolor: string; leads: number; agendas: number; n: number; ventas: number; close_rate: number | null;
   }[];
   const conciencias = (concRes.data ?? []) as {
-    conciencia: number; leads: number; agendas: number; ventas: number; close_rate: number;
+    conciencia: number; leads: number; agendas: number; n: number; ventas: number; close_rate: number | null;
   }[];
   const closers = (closerRes.data ?? []) as {
-    closer: string; llamadas: number; atendidas: number; no_show: number; show_rate: number;
-    ventas: number; facturacion: number; aov: number; close_rate: number;
+    closer: string; llamadas: number; atendidas: number; no_show: number; resueltas: number;
+    pendientes: number; show_rate: number | null; ventas: number; facturacion: number; aov: number | null; close_rate: number | null;
   }[];
 
   const funnel = [
@@ -109,8 +116,7 @@ export default async function OperacionesPage({
   ] as const;
 
   return (
-    <div className="space-y-10">
-      {/* Header + selector de período */}
+    <div className="space-y-10 tabular-nums">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-heading text-2xl font-bold">Operaciones</h1>
         <PeriodSelector value={period.periodo} />
@@ -120,8 +126,8 @@ export default async function OperacionesPage({
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Cash Collected" def={DEFS.cash_collected} value={K.cash_collected} meta={metaOf("cash_collected")} fmt={usd} ritmoUnit="USD" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
         <KpiCard label="Facturación" def={DEFS.facturacion} value={K.facturacion} meta={metaOf("facturacion")} fmt={usd} ritmoUnit="USD" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
-        <KpiCard label="Ventas" def={DEFS.ventas} value={K.ventas} meta={metaOf("ventas")} fmt={fmtInt} ritmoUnit="ventas" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
-        <KpiCard label="Llamadas agendadas" def={DEFS.agendas} value={K.agendas} meta={metaOf("agendas")} fmt={fmtInt} ritmoUnit="agendas" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
+        <KpiCard label="Ventas" def={DEFS.ventas} value={K.ventas} meta={metaOf("ventas")} fmt={(n) => fmtInt(n)} ritmoUnit="ventas" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
+        <KpiCard label="Llamadas agendadas" def={DEFS.agendas} value={K.agendas} meta={metaOf("agendas")} fmt={(n) => fmtInt(n)} ritmoUnit="agendas" isCurrent={period.isCurrent} daysLeft={period.daysLeft} />
       </section>
 
       {/* Bloque 2 — Embudo */}
@@ -138,13 +144,22 @@ export default async function OperacionesPage({
               ) : (
                 <div key={i} className="flex items-center justify-between border-l-2 border-border py-1 pl-4">
                   <MetricLabel label={f.label} def={f.def} />
-                  <span className="font-mono text-sm text-muted-foreground">{fmtPct(f.rate)}</span>
+                  <span className="font-mono text-sm text-muted-foreground">
+                    {fmtPct(f.rate)}
+                    {f.label === "Show-up rate" && K.pendientes > 0 && (
+                      <span className="ml-2 text-warning">· {K.pendientes} sin desenlace</span>
+                    )}
+                  </span>
                 </div>
               ),
             )}
-            <div className="mt-2 flex flex-wrap gap-6 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
               <span>Close (agendadas): {fmtPct(K.close_rate_agendadas)}</span>
               <span>AOV: {usd(K.aov)}</span>
+              {K.canceladas > 0 && <span>Canceladas: {fmtInt(K.canceladas)}</span>}
+              {K.pendientes > 0 && (
+                <span className="text-warning">{K.pendientes} llamada(s) pasadas sin desenlace cargado</span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -172,24 +187,27 @@ export default async function OperacionesPage({
                     <TableHead>Dolor</TableHead>
                     <TableHead className="text-right">Leads</TableHead>
                     <TableHead className="text-right">Agendas</TableHead>
+                    <TableHead className="text-right">n</TableHead>
                     <TableHead className="text-right">Ventas</TableHead>
                     <TableHead className="text-right">Close</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {dolores.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">Sin datos.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">Sin datos.</TableCell></TableRow>
                   ) : dolores.map((d) => (
                     <TableRow key={d.dolor}>
                       <TableCell className="text-foreground">{DOLOR_LABEL[d.dolor] ?? d.dolor}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(d.leads)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(d.agendas)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(d.n)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(d.ventas)}</TableCell>
-                      <TableCell className="text-right font-mono text-foreground">{fmtPct(d.close_rate)}</TableCell>
+                      <TableCell className="text-right font-mono text-foreground">{Number(d.n) < MIN_N ? "—" : fmtPct(d.close_rate)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              <p className="mt-2 font-mono text-[11px] text-[var(--text-muted)]">n = atendidas. Close se muestra solo con n ≥ {MIN_N}.</p>
             </CardContent>
           </Card>
         </div>
@@ -203,24 +221,27 @@ export default async function OperacionesPage({
                     <TableHead>Conciencia</TableHead>
                     <TableHead className="text-right">Leads</TableHead>
                     <TableHead className="text-right">Agendas</TableHead>
+                    <TableHead className="text-right">n</TableHead>
                     <TableHead className="text-right">Ventas</TableHead>
                     <TableHead className="text-right">Close</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {conciencias.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">Sin datos.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">Sin datos.</TableCell></TableRow>
                   ) : conciencias.map((c) => (
                     <TableRow key={c.conciencia}>
                       <TableCell className="font-mono text-foreground">{CONCIENCIA_LABEL[c.conciencia] ?? c.conciencia}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.leads)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.agendas)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.n)}</TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.ventas)}</TableCell>
-                      <TableCell className="text-right font-mono text-foreground">{fmtPct(c.close_rate)}</TableCell>
+                      <TableCell className="text-right font-mono text-foreground">{Number(c.n) < MIN_N ? "—" : fmtPct(c.close_rate)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              <p className="mt-2 font-mono text-[11px] text-[var(--text-muted)]">n = atendidas. Close se muestra solo con n ≥ {MIN_N}.</p>
             </CardContent>
           </Card>
         </div>
@@ -236,6 +257,7 @@ export default async function OperacionesPage({
                 <TableRow>
                   <TableHead>Closer</TableHead>
                   <TableHead className="text-right">Llamadas</TableHead>
+                  <TableHead className="text-right">Pend.</TableHead>
                   <TableHead className="text-right">Show</TableHead>
                   <TableHead className="text-right">Close</TableHead>
                   <TableHead className="text-right">Ventas</TableHead>
@@ -245,22 +267,23 @@ export default async function OperacionesPage({
               </TableHeader>
               <TableBody>
                 {closers.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-sm text-muted-foreground">Sin llamadas en el período.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-sm text-muted-foreground">Sin llamadas en el período.</TableCell></TableRow>
                 ) : closers.map((c) => (
                   <TableRow key={c.closer}>
                     <TableCell className="font-mono text-foreground">{c.closer}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.llamadas)}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{fmtPct(c.show_rate)}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{fmtPct(c.close_rate)}</TableCell>
+                    <TableCell className={`text-right font-mono ${Number(c.pendientes) > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmtInt(c.pendientes)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{c.show_rate == null ? "—" : fmtPct(c.show_rate)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{c.close_rate == null ? "—" : fmtPct(c.close_rate)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{fmtInt(c.ventas)}</TableCell>
                     <TableCell className="text-right font-mono text-foreground">{usd(Number(c.facturacion))}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{usd(Number(c.aov))}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{usd(num(c.aov))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             <div className="mt-4 flex flex-wrap gap-6 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
-              <span>Setters (global) · Leads {fmtInt(K.leads)} → Agendas {fmtInt(K.agendas)} ({fmtPct(K.tasa_agenda)})</span>
+              <span>Setters (global) · Leads {fmtInt(K.leads)} → Agendaron {fmtPct(K.tasa_agenda)}</span>
             </div>
           </CardContent>
         </Card>

@@ -138,7 +138,8 @@ Deno.serve(async (req) => {
 
   const sb = serviceClient();
 
-  // --- Cancelación: actualizar el booking existente sin pisar el resto. ---
+  // --- Cancelación: SOLO actualiza el booking existente. Nunca inserta una fila
+  // nueva (eso duplicaba agendas). Si no existe, se loguea y termina. ---
   if (event === "invitee.canceled") {
     const { data: upd, error: updErr } = await sb
       .from("bookings")
@@ -150,7 +151,14 @@ Deno.serve(async (req) => {
     if (upd && upd.length > 0) {
       return json({ ok: true, action: "canceled", booking_id: upd[0].id, lead_id: upd[0].lead_id });
     }
-    // Si no existía (cancel sin create previo), cae al upsert de abajo como 'cancelada'.
+    console.log(`cancel de un evento que no teníamos: ${eventUuid} (no se inserta)`);
+    return json({ ok: true, action: "canceled_noop" });
+  }
+
+  // Un booking sin fecha de llamada no puede existir (rompe todo cálculo temporal).
+  if (!sched?.["start_time"]) {
+    console.log(`payload de Calendly sin start_time: ${eventUuid}`);
+    return json({ error: "falta la fecha de la llamada (scheduled_event.start_time)" }, 400);
   }
 
   const record = {

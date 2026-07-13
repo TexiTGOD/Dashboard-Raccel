@@ -19,8 +19,8 @@ export const DEFS: Record<string, MetricDef> = {
     formula: "COUNT(sales) cerradas en el período",
   },
   agendas: {
-    definicion: "Llamadas agendadas en el período.",
-    formula: "COUNT(bookings) con fecha_llamada en el período",
+    definicion: "Llamadas agendadas en el período (absoluto). Las canceladas no cuentan.",
+    formula: "COUNT(bookings) con fecha_llamada en el período, clase ≠ cancelada",
   },
   leads: {
     definicion: "Personas nuevas que escribieron por DM.",
@@ -35,8 +35,12 @@ export const DEFS: Record<string, MetricDef> = {
     formula: "calificados / leads",
   },
   tasa_agenda: {
-    definicion: "De cada 100 que escriben, cuántas terminan agendando.",
-    formula: "agendas / leads",
+    definicion: "De los leads del período, qué fracción generó al menos una agenda (cohorte).",
+    formula: "leads del período que agendaron / leads del período",
+  },
+  show_pendientes: {
+    definicion: "Llamadas que ya pasaron y todavía no tienen desenlace cargado. No entran en ningún ratio, pero hay que cargarlas.",
+    formula: "bookings con fecha_llamada < now() y estado = programada",
   },
   atendidas: {
     definicion: "Llamadas donde el lead se presentó.",

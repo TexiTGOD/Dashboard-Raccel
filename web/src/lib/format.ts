@@ -8,9 +8,16 @@ export function fmtFecha(iso: string | null): string {
   });
 }
 
+// Formateador único de moneda: sin decimales sueltos, separador de miles.
 export function fmtMonto(monto: number | null, moneda: string | null): string {
   if (monto == null) return "—";
-  return `${moneda ?? "USD"} ${Number(monto).toLocaleString("es-AR")}`;
+  return `${moneda ?? "USD"} ${Number(monto).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
+}
+
+// Monto sin el prefijo de moneda (para tablas densas: la moneda va en el header).
+export function fmtNum(monto: number | null): string {
+  if (monto == null) return "—";
+  return Number(monto).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
 export function fmtInt(v: number | null | undefined): string {

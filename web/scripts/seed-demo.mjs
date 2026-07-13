@@ -67,6 +67,8 @@ async function main() {
     .like("calendly_event_id", "demo_%");
   const prevIds = (prevBookings ?? []).map((b) => b.id);
   await sb.from("sales").delete().in("email_comprador", ["bea@demo.com", "otramail@gmail.com"]);
+  // Cualquier venta colgada de un booking demo (evita contradicciones tipo Eve). Payments caen por cascade.
+  if (prevIds.length) await sb.from("sales").delete().in("booking_id", prevIds);
   if (prevIds.length) await sb.from("calls").delete().in("booking_id", prevIds);
   await sb.from("bookings").delete().like("calendly_event_id", "demo_%");
   await sb.from("leads").delete().like("manychat_contact_id", "demo_%");
@@ -129,7 +131,8 @@ async function main() {
 
   console.log("7) Metas + gastos del mes actual…");
   const now = new Date();
-  const periodo = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  // periodo en UTC (igual que el front: period.startStr) para que card y form lean la misma fila.
+  const periodo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
   const metasSeed = [
     { metrica: "cash_collected", objetivo: 6000 },
     { metrica: "facturacion", objetivo: 12000 },

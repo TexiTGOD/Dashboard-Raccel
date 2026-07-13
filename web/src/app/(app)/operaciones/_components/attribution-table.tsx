@@ -5,6 +5,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -81,6 +82,25 @@ export function AttributionTable({ rows }: { rows: AtribRow[] }) {
     return <p className="text-sm text-muted-foreground">Sin datos de atribución en el período.</p>;
   }
 
+  // Totales — control de integridad: tienen que cuadrar con las cards de arriba.
+  const tot = data.reduce(
+    (a, r) => ({
+      leads: a.leads + r.leads,
+      calificados: a.calificados + r.calificados,
+      agendas: a.agendas + r.agendas,
+      atendidas: a.atendidas + r.atendidas,
+      ventas: a.ventas + r.ventas,
+      facturacion: a.facturacion + r.facturacion,
+      cash_collected: a.cash_collected + r.cash_collected,
+    }),
+    { leads: 0, calificados: 0, agendas: 0, atendidas: 0, ventas: 0, facturacion: 0, cash_collected: 0 },
+  );
+  const totRow: Record<string, number | string> = {
+    ...tot,
+    pieza_origen: "Total",
+    cash_por_lead: tot.leads > 0 ? tot.cash_collected / tot.leads : 0,
+  };
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -118,6 +138,18 @@ export function AttributionTable({ rows }: { rows: AtribRow[] }) {
             </TableRow>
           ))}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            {cols.map((c) => (
+              <TableCell
+                key={c.key}
+                className={`whitespace-nowrap font-mono text-foreground ${c.type === "text" ? "text-left" : "text-right"}`}
+              >
+                {fmtCell(totRow[c.key], c.type)}
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableFooter>
       </Table>
     </div>
   );
