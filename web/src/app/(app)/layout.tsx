@@ -6,7 +6,6 @@ import { NavLinks } from "./nav-links";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
-  const comercial = profile.rol === "closer" || profile.rol === "admin";
 
   return (
     <div className="flex-1 flex flex-col">
@@ -18,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             Raccel
           </Link>
-          {comercial && <NavLinks />}
+          <NavLinks rol={profile.rol} />
           <div className="ml-auto flex items-center gap-5">
             <div className="text-right leading-tight">
               <div className="text-sm text-foreground">{profile.nombre}</div>

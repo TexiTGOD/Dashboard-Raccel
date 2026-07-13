@@ -3,7 +3,7 @@ import { requireProfile } from "@/lib/auth";
 
 export default async function Home() {
   const profile = await requireProfile();
+  if (profile.rol === "admin") redirect("/operaciones");
   if (profile.rol === "setter") redirect("/setter");
-  // admin y closer arrancan en la vista de llamadas.
   redirect("/closer");
 }

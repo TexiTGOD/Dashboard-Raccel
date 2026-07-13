@@ -75,11 +75,11 @@ async function main() {
 
   console.log("3) Leads…");
   const leadsSeed = [
-    { manychat_contact_id: "demo_ana", ig_username: "ana.demo", nombre: "Ana Demo", pieza_origen: "REEL_0402", dolor: "ansiedad_apego", conciencia: 4, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Hace meses que no puedo dejar de pensar en él aunque sé que me hace mal.", respuesta_econ: "Argentina, diseñadora freelance", estado_funnel: "calificado" },
-    { manychat_contact_id: "demo_bea", ig_username: "bea.demo", nombre: "Bea Demo", pieza_origen: "CARR_1103", dolor: "comparacion_otra", conciencia: 3, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Siento que siempre elijo a quien no me elige.", respuesta_econ: "España, enfermera", estado_funnel: "calificado" },
-    { manychat_contact_id: "demo_caro", ig_username: "caro.demo", nombre: "Caro Demo", pieza_origen: "REEL_0402", dolor: "no_puedo_soltar", conciencia: 5, crisis: false, econ_calificacion: "zona_gris", respuesta_lead: "Sé lo que tengo que hacer pero no puedo soltar.", estado_funnel: "zona_gris" },
-    { manychat_contact_id: "demo_eve", ig_username: "eve.demo", nombre: "Eve Demo", pieza_origen: "HIST_0510", dolor: "darlo_todo_no_elegida", conciencia: 6, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Quiero empezar un proceso, ya me cansé de este patrón.", estado_funnel: "calificado" },
-    { manychat_contact_id: "demo_dai", ig_username: "dai.demo", nombre: "Dai Demo", crisis: true, estado_funnel: "crisis", respuesta_lead: "[LEAD EN CRISIS — no debe aparecer en vistas comerciales]" },
+    { manychat_contact_id: "demo_ana", ig_username: "ana.demo", nombre: "Ana Demo", pieza_origen: "REEL_0402", dolor: "ansiedad_apego", conciencia: 4, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Hace meses que no puedo dejar de pensar en él aunque sé que me hace mal.", respuesta_econ: "Argentina, diseñadora freelance", estado_funnel: "calificado", fecha_primer_contacto: dias(-6) },
+    { manychat_contact_id: "demo_bea", ig_username: "bea.demo", nombre: "Bea Demo", pieza_origen: "CARR_1103", dolor: "comparacion_otra", conciencia: 3, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Siento que siempre elijo a quien no me elige.", respuesta_econ: "España, enfermera", estado_funnel: "calificado", fecha_primer_contacto: dias(-5) },
+    { manychat_contact_id: "demo_caro", ig_username: "caro.demo", nombre: "Caro Demo", pieza_origen: "REEL_0402", dolor: "no_puedo_soltar", conciencia: 5, crisis: false, econ_calificacion: "zona_gris", respuesta_lead: "Sé lo que tengo que hacer pero no puedo soltar.", estado_funnel: "zona_gris", fecha_primer_contacto: dias(-4) },
+    { manychat_contact_id: "demo_eve", ig_username: "eve.demo", nombre: "Eve Demo", pieza_origen: "HIST_0510", dolor: "darlo_todo_no_elegida", conciencia: 6, crisis: false, econ_calificacion: "calificada", respuesta_lead: "Quiero empezar un proceso, ya me cansé de este patrón.", estado_funnel: "calificado", fecha_primer_contacto: dias(-3) },
+    { manychat_contact_id: "demo_dai", ig_username: "dai.demo", nombre: "Dai Demo", crisis: true, estado_funnel: "crisis", respuesta_lead: "[LEAD EN CRISIS — no debe aparecer en vistas comerciales]", fecha_primer_contacto: dias(-2) },
   ];
   const { data: leads, error: lErr } = await sb.from("leads").insert(leadsSeed).select("id, manychat_contact_id");
   if (lErr) throw lErr;
@@ -126,6 +126,24 @@ async function main() {
     cuotas_total: 1, tipo: "nueva",
     moneda: "USD", status: "approved", metodo_pago: "hotmart",
   });
+
+  console.log("7) Metas + gastos del mes actual…");
+  const now = new Date();
+  const periodo = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const metasSeed = [
+    { metrica: "cash_collected", objetivo: 6000 },
+    { metrica: "facturacion", objetivo: 12000 },
+    { metrica: "ventas", objetivo: 5 },
+    { metrica: "agendas", objetivo: 12 },
+    { metrica: "leads", objetivo: 40 },
+  ].map((m) => ({ periodo, ...m }));
+  await sb.from("metas").upsert(metasSeed, { onConflict: "periodo,metrica" });
+
+  await sb.from("gastos").delete().eq("periodo", periodo).in("concepto", ["Meta Ads (demo)", "ManyChat (demo)"]);
+  await sb.from("gastos").insert([
+    { periodo, categoria: "ads", concepto: "Meta Ads (demo)", monto: 1500 },
+    { periodo, categoria: "herramientas", concepto: "ManyChat (demo)", monto: 120 },
+  ]);
 
   console.log("\n✓ Seed completo.");
   console.log("   Login admin :  admin@raccel.test");
