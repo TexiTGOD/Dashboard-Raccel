@@ -43,6 +43,15 @@ Deno.serve(async (req) => {
     feedback_descalificada: p.feedback_descalificada ?? null,
   };
 
+  // ALARMA de calidad de dato: pieza que no matchea REEL/CARR/HIST_DDMM (ej. el
+  // literal 'REEL_DDMM' sin reemplazar en la plantilla). Se guarda igual (el
+  // dashboard la muestra en el bucket 'Pieza inválida'), pero se loguea la alarma.
+  if (record.pieza_origen && !/^(REEL|CARR|HIST)_\d{4}$/.test(String(record.pieza_origen))) {
+    console.warn(
+      `ALARMA pieza_origen inválida: "${record.pieza_origen}" (contacto ${record.manychat_contact_id})`,
+    );
+  }
+
   const { data: existing, error: selErr } = await sb
     .from("leads")
     .select("id, conciencia, pieza_origen")

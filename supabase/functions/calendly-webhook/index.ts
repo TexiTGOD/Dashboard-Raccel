@@ -156,8 +156,14 @@ Deno.serve(async (req) => {
   }
 
   // Un booking sin fecha de llamada no puede existir (rompe todo cálculo temporal).
+  // Se rechaza y se guarda el payload en bookings_descartados para auditar (no se inserta booking).
   if (!sched?.["start_time"]) {
     console.log(`payload de Calendly sin start_time: ${eventUuid}`);
+    await sb.from("bookings_descartados").insert({
+      calendly_event_id: eventUuid,
+      motivo: "payload sin scheduled_event.start_time",
+      payload: body,
+    });
     return json({ error: "falta la fecha de la llamada (scheduled_event.start_time)" }, 400);
   }
 

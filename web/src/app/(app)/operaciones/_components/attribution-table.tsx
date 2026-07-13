@@ -125,16 +125,23 @@ export function AttributionTable({ rows }: { rows: AtribRow[] }) {
         <TableBody>
           {data.map((r) => (
             <TableRow key={r.pieza_origen}>
-              {cols.map((c) => (
-                <TableCell
-                  key={c.key}
-                  className={`whitespace-nowrap font-mono ${c.type === "text" ? "text-left" : "text-right"} ${
-                    c.key === "cash_por_lead" ? "text-foreground" : "text-muted-foreground"
-                  } ${c.key === "pieza_origen" ? "text-foreground" : ""}`}
-                >
-                  {fmtCell(r[c.key], c.type)}
-                </TableCell>
-              ))}
+              {cols.map((c) => {
+                const alarma = c.key === "pieza_origen" && r.pieza_origen === "Pieza inválida";
+                return (
+                  <TableCell
+                    key={c.key}
+                    className={`whitespace-nowrap font-mono ${c.type === "text" ? "text-left" : "text-right"} ${
+                      alarma
+                        ? "text-danger"
+                        : c.key === "cash_por_lead" || c.key === "pieza_origen"
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {fmtCell(r[c.key], c.type)}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>

@@ -48,9 +48,88 @@ create trigger trg_sales_fecha_cierre
   for each row execute function public.sales_fecha_cierre();
 
 -- -----------------------------------------------------------------------------
--- 1.5 — bookings.fecha_llamada NOT NULL (un booking sin fecha no puede existir)
--- Limpiamos primero las filas sin fecha (no accionables, rompen el tiempo).
+-- 1.2 — calendly_event_id: normalizar a UUID pelado (último segmento de la URI).
+-- El bug del duplicado: invitee.created guardaba la URI completa y
+-- invitee.canceled el UUID pelado -> el UNIQUE no dispara -> inserta fila nueva.
+-- (a) dedup + backfill de lo existente, (b) trigger para que a futuro siempre
+-- se guarde pelado (venga como venga).
 -- -----------------------------------------------------------------------------
+
+-- (a) Mapeo uuid -> fila que sobrevive (la más vieja = el 'created', suele tener
+--     el lead matcheado) + estado del evento MÁS RECIENTE (cancelada gana si es
+--     posterior).
+create temporary table _dedup_bookings as
+select
+  regexp_replace(calendly_event_id, '^.*/', '')            as uuid,
+  (array_agg(id     order by created_at asc))[1]           as keep_id,
+  (array_agg(estado order by created_at desc))[1]          as win_estado
+from public.bookings
+where calendly_event_id is not null
+group by 1;
+
+-- Repuntar calls y sales de las filas perdedoras a la que sobrevive.
+update public.calls c set booking_id = d.keep_id
+  from public.bookings b
+  join _dedup_bookings d on d.uuid = regexp_replace(b.calendly_event_id, '^.*/', '')
+  where c.booking_id = b.id and b.id <> d.keep_id;
+update public.sales s set booking_id = d.keep_id
+  from public.bookings b
+  join _dedup_bookings d on d.uuid = regexp_replace(b.calendly_event_id, '^.*/', '')
+  where s.booking_id = b.id and b.id <> d.keep_id;
+
+-- Borrar perdedoras (queda una fila por evento).
+delete from public.bookings b using _dedup_bookings d
+  where regexp_replace(b.calendly_event_id, '^.*/', '') = d.uuid and b.id <> d.keep_id;
+
+-- Normalizar la sobreviviente al UUID pelado + estado ganador.
+update public.bookings b
+  set calendly_event_id = d.uuid, estado = d.win_estado
+  from _dedup_bookings d where b.id = d.keep_id;
+
+-- (b) Trigger: cualquier escritura futura se guarda con el UUID pelado.
+create or replace function public.bookings_normalize_event_id()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.calendly_event_id is not null then
+    new.calendly_event_id := regexp_replace(new.calendly_event_id, '^.*/', '');
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_bookings_normalize_event_id
+  before insert or update on public.bookings
+  for each row execute function public.bookings_normalize_event_id();
+
+-- -----------------------------------------------------------------------------
+-- 1.5 — bookings.fecha_llamada NOT NULL. Los sin fecha son payloads reales
+-- incompletos: NO se borran, se mueven a bookings_descartados para auditar.
+-- -----------------------------------------------------------------------------
+create table public.bookings_descartados (
+  id                uuid        primary key default gen_random_uuid(),
+  calendly_event_id text,
+  lead_id           uuid,
+  estado            text,
+  ig_username       text,
+  email             text,
+  nombre            text,
+  closer            text,
+  fecha_llamada     timestamptz,
+  motivo            text,
+  payload           jsonb,
+  origen_created_at timestamptz,
+  descartado_at     timestamptz not null default now()
+);
+alter table public.bookings_descartados enable row level security;
+create policy bd_admin_all on public.bookings_descartados
+  for all using (public.is_admin()) with check (public.is_admin());
+grant all privileges on public.bookings_descartados to authenticated, service_role;
+
+insert into public.bookings_descartados
+  (calendly_event_id, lead_id, estado, ig_username, email, nombre, closer, fecha_llamada, motivo, origen_created_at)
+select calendly_event_id, lead_id, estado, ig_username, email, nombre, closer, fecha_llamada,
+       'fecha_llamada null (payload incompleto)', created_at
+from public.bookings where fecha_llamada is null;
+
 delete from public.bookings where fecha_llamada is null;
 alter table public.bookings alter column fecha_llamada set not null;
 
@@ -170,7 +249,11 @@ language sql stable security invoker set search_path = public as $$
   with
   lead_agg as (
     select
-      case when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen else 'Sin atribuir' end as bucket,
+      case
+        when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen
+        when l.pieza_origen is null or l.pieza_origen = '' then 'Sin atribuir'
+        else 'Pieza inválida'
+      end as bucket,
       count(*) as leads,
       count(*) filter (where l.econ_calificacion = 'calificada') as calificados
     from public.leads l
@@ -179,7 +262,11 @@ language sql stable security invoker set search_path = public as $$
   ),
   book_agg as (
     select
-      case when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen else 'Sin atribuir' end as bucket,
+      case
+        when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen
+        when l.pieza_origen is null or l.pieza_origen = '' then 'Sin atribuir'
+        else 'Pieza inválida'
+      end as bucket,
       count(*) as agendas,
       count(*) filter (where b.estado = 'atendida') as atendidas
     from public.bookings b
@@ -191,7 +278,11 @@ language sql stable security invoker set search_path = public as $$
   ),
   sale_agg as (
     select
-      case when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen else 'Sin atribuir' end as bucket,
+      case
+        when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen
+        when l.pieza_origen is null or l.pieza_origen = '' then 'Sin atribuir'
+        else 'Pieza inválida'
+      end as bucket,
       count(*) as ventas,
       coalesce(sum(s.valor_contrato), 0) as facturacion
     from public.sales s
@@ -202,7 +293,11 @@ language sql stable security invoker set search_path = public as $$
   ),
   cash_agg as (
     select
-      case when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen else 'Sin atribuir' end as bucket,
+      case
+        when l.pieza_origen ~ '^(REEL|CARR|HIST)_[0-9]{4}$' then l.pieza_origen
+        when l.pieza_origen is null or l.pieza_origen = '' then 'Sin atribuir'
+        else 'Pieza inválida'
+      end as bucket,
       coalesce(sum(p.monto), 0) as cash_collected
     from public.payments p
     join public.sales s on s.id = p.sale_id

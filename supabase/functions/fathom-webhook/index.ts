@@ -20,13 +20,15 @@ Deno.serve(async (req) => {
 
   const sb = serviceClient();
 
-  // 1) por calendly_event_id (más confiable)
+  // 1) por calendly_event_id (más confiable). Se normaliza a UUID pelado (último
+  // segmento) para matchear como guarda Calendly.
   let bookingId: string | null = null;
   if (p.calendly_event_id) {
+    const eventUuid = String(p.calendly_event_id).replace(/^.*\//, "");
     const { data } = await sb
       .from("bookings")
       .select("id")
-      .eq("calendly_event_id", String(p.calendly_event_id))
+      .eq("calendly_event_id", eventUuid)
       .maybeSingle();
     bookingId = data?.id ?? null;
   }
