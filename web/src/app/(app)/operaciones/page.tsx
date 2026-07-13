@@ -142,15 +142,24 @@ export default async function OperacionesPage({
                   <span className="font-mono text-xl text-foreground">{fmtInt(f.value)}</span>
                 </div>
               ) : (
-                <div key={i} className="flex items-center justify-between border-l-2 border-border py-1 pl-4">
-                  <MetricLabel label={f.label} def={f.def} />
-                  <span className="font-mono text-sm text-muted-foreground">
-                    {fmtPct(f.rate)}
-                    {f.label === "Show-up rate" && K.pendientes > 0 && (
-                      <span className="ml-2 text-warning">· {K.pendientes} sin desenlace</span>
-                    )}
-                  </span>
-                </div>
+                (() => {
+                  // Show-up con pendientes = dato incompleto: se atenúa + asterisco.
+                  const incompleto = f.label === "Show-up rate" && K.pendientes > 0;
+                  return (
+                    <div key={i} className="flex items-center justify-between border-l-2 border-border py-1 pl-4">
+                      <MetricLabel label={f.label} def={f.def} />
+                      <span className="font-mono text-sm">
+                        <span className={incompleto ? "text-[var(--text-muted)]" : "text-muted-foreground"}>
+                          {fmtPct(f.rate)}
+                          {incompleto ? "*" : ""}
+                        </span>
+                        {incompleto && (
+                          <span className="ml-2 text-warning">· {K.pendientes} sin desenlace</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })()
               ),
             )}
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
@@ -158,7 +167,9 @@ export default async function OperacionesPage({
               <span>AOV: {usd(K.aov)}</span>
               {K.canceladas > 0 && <span>Canceladas: {fmtInt(K.canceladas)}</span>}
               {K.pendientes > 0 && (
-                <span className="text-warning">{K.pendientes} llamada(s) pasadas sin desenlace cargado</span>
+                <span className="text-warning">
+                  * show-up incompleto — {K.pendientes} llamada(s) pasadas sin desenlace cargado
+                </span>
               )}
             </div>
           </CardContent>
@@ -282,8 +293,11 @@ export default async function OperacionesPage({
                 ))}
               </TableBody>
             </Table>
-            <div className="mt-4 flex flex-wrap gap-6 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
+            <div className="mt-4 flex flex-col gap-1 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
               <span>Setters (global) · Leads {fmtInt(K.leads)} → Agendaron {fmtPct(K.tasa_agenda)}</span>
+              <span className="text-[var(--text-muted)]">
+                Ticket prom. es por closer; el AOV del embudo es global (incluye ventas sin closer asignado) — por eso pueden diferir.
+              </span>
             </div>
           </CardContent>
         </Card>

@@ -30,6 +30,13 @@ export function fmtPct(v: number | null | undefined): string {
   return `${(Number(v) * 100).toFixed(1)}%`;
 }
 
+// Número con decimales (para "ritmo": 3,1 leads/día). Único lugar para números
+// fraccionarios sueltos.
+export function fmtDec(v: number | null | undefined, digits = 1): string {
+  if (v == null) return "—";
+  return Number(v).toLocaleString("es-AR", { maximumFractionDigits: digits });
+}
+
 // Fecha corta solo día/mes (para tablas).
 export function fmtDia(iso: string | null): string {
   if (!iso) return "—";

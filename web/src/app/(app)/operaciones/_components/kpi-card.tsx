@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { MetricLabel } from "./metric-label";
-import { fmtPct } from "@/lib/format";
+import { fmtPct, fmtDec } from "@/lib/format";
 import type { MetricDef } from "@/lib/metric-defs";
 
 export function KpiCard({
@@ -42,8 +42,7 @@ export function KpiCard({
             </div>
             {ritmo != null && (
               <div className="font-mono text-xs text-[var(--text-muted)]">
-                Necesitás {ritmo.toLocaleString("es-AR", { maximumFractionDigits: 1 })} {ritmoUnit}/día ·
-                quedan {daysLeft} días
+                Necesitás {fmtDec(ritmo)} {ritmoUnit}/día · quedan {daysLeft} días
               </div>
             )}
           </div>
