@@ -11,7 +11,7 @@ import { fmtFecha, fmtMonto } from "@/lib/format";
 import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
 import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
 
-type SaleWithPayments = Sale & { payments: Payment[] | null; cuotas: Cuota[] | null };
+type SaleWithPayments = Sale & { payments: Payment[] | null };
 type BookingDetail = Booking & {
   lead: Lead | null;
   calls: Call[] | null;
@@ -47,7 +47,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
 
   const { data } = await supabase
     .from("bookings")
-    .select("*, lead:leads(*), calls(*), sales(*, payments(*), cuotas(*))")
+    .select("*, lead:leads(*), calls(*), sales(*, payments(*))")
     .eq("id", id)
     .maybeSingle();
 
@@ -60,7 +60,17 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     .slice()
     .sort((a, b) => (a.numero_cuota ?? 999) - (b.numero_cuota ?? 999));
   const cashCollected = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
-  const cuotas = (sale?.cuotas ?? []).slice().sort((a, b) => a.numero_cuota - b.numero_cuota);
+
+  // Cuotas aparte: si la tabla no existe todavía, no rompe el expediente.
+  let cuotas: Cuota[] = [];
+  if (sale) {
+    const { data: cu } = await supabase
+      .from("cuotas")
+      .select("*")
+      .eq("sale_id", sale.id)
+      .order("numero_cuota", { ascending: true });
+    cuotas = (cu ?? []) as Cuota[];
+  }
   // No se puede cargar una venta si la llamada todavía no ocurrió.
   const bookingFutura = b.fecha_llamada ? new Date(b.fecha_llamada).getTime() > Date.now() : false;
 
