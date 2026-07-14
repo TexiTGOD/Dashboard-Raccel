@@ -43,9 +43,12 @@ export default async function HoyPage({
   const pendientes = ((pendRes.data ?? []) as unknown as PendRow[]).filter((b) => !b.lead?.crisis);
   const ventasSinMatchear = (ventasRes.data ?? []).length;
   const mora = (moraRes.data ?? []) as {
-    cuota_id: string; numero_cuota: number; monto_esperado: number; fecha_vencimiento: string;
-    dias_vencida: number; comprador: string | null; booking_id: string | null;
+    cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
+    fecha_vencimiento: string; dias_vencida: number; comprador: string | null; booking_id: string | null;
   }[];
+  // "pago único" cuando la venta es de 1 cuota; si no, "cuota N/total".
+  const etiquetaCuota = (n: number, total: number | null) =>
+    total != null && total <= 1 ? "pago único" : `cuota ${n}${total ? `/${total}` : ""}`;
 
   // Ritmo del mes: cascada desde el gap de cash, en unidades de negocio.
   const metaOf = (m: string) => {
@@ -60,30 +63,23 @@ export default async function HoyPage({
     const m = metaOf(mk);
     return m != null && m > 0 ? { v: m, sup: true } : { v: null, sup: false };
   };
-  const pctCobrado =
-    K.facturacion > 0
-      ? { v: K.cash_collected / K.facturacion, sup: false }
-      : (() => {
-          const f = metaOf("facturacion");
-          return f && cashMeta ? { v: cashMeta / f, sup: true } : { v: null as number | null, sup: false };
-        })();
-  const aovT = tasa(K.aov, "aov");
+  // Un solo eslabón de plata: AOV cash (plata real que entra por venta). Ya
+  // captura el efecto de las cuotas — no hay paso de facturación ni % cobrado.
+  const aovT = tasa(K.aov_cash, "aov");
   const closeT = tasa(K.close_rate_atendidas, "close_rate");
   const showT = tasa(K.show_rate, "show_rate");
   const agendaT = tasa(K.tasa_agenda, "tasa_agenda");
-  let facturacionGap: number | null = null,
-    ventasGap: number | null = null,
+  let ventasGap: number | null = null,
     atendidasGap: number | null = null,
     agendasGap: number | null = null,
     leadsGap: number | null = null;
   if (gap != null && gap > 0) {
-    if (pctCobrado.v) facturacionGap = gap / pctCobrado.v;
-    if (facturacionGap != null && aovT.v) ventasGap = facturacionGap / aovT.v;
+    if (aovT.v) ventasGap = gap / aovT.v;
     if (ventasGap != null && closeT.v) atendidasGap = ventasGap / closeT.v;
     if (atendidasGap != null && showT.v) agendasGap = atendidasGap / showT.v;
     if (agendasGap != null && agendaT.v) leadsGap = agendasGap / agendaT.v;
   }
-  const algunSupuesto = [pctCobrado, aovT, closeT, showT, agendaT].some((t) => t.sup);
+  const algunSupuesto = [aovT, closeT, showT, agendaT].some((t) => t.sup);
   const dl = period.daysLeft;
 
   return (
@@ -189,7 +185,7 @@ export default async function HoyPage({
                   <CardContent className="flex items-center justify-between gap-3 px-5 py-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm text-foreground">
-                        {c.comprador ?? "—"} · cuota {c.numero_cuota}
+                        {c.comprador ?? "—"} · {etiquetaCuota(c.numero_cuota, c.cuotas_total)}
                       </div>
                       <div className="truncate font-mono text-xs text-muted-foreground">
                         venció {fmtFecha(c.fecha_vencimiento)} · <span className="text-danger">{c.dias_vencida}d</span>

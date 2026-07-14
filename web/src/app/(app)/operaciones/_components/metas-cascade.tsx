@@ -2,39 +2,39 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { guardarMetas } from "../actions";
+import { guardarMetas, getTasasHistoricas } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fmtInt, fmtMonto, fmtPct, fmtDec } from "@/lib/format";
 import type { TasasHistoricas } from "@/lib/dashboard";
 
-// La cascada corre hacia atrás desde el cash:
-//   facturación = cash / %cobrado
-//   ventas      = facturación / AOV
-//   atendidas   = ventas / close
-//   agendas     = atendidas / show
-//   leads       = agendas / tasa_agenda
+// La cascada corre hacia atrás desde el cash. Un solo eslabón de plata (AOV cash):
+//   ventas    = cash / AOV cash   (AOV cash = plata real que entra por venta)
+//   atendidas = ventas / close
+//   agendas   = atendidas / show
+//   leads     = agendas / tasa_agenda
 // Cada eslabón: count = upstream / rate. Si se pinea el count, se deriva el rate.
-type LinkKey = "cobrado" | "aov" | "close" | "show" | "agenda";
+type LinkKey = "aov" | "close" | "show" | "agenda";
 interface LinkMeta {
   key: LinkKey;
   rateLabel: string;
   countLabel: string;
   isRatio: boolean; // rate debe estar en (0,1]
-  rateMoney?: boolean; // aov es monto, no %
-  countMoney?: boolean; // facturación es monto
+  rateMoney?: boolean; // aov cash es monto, no %
+  countMoney?: boolean;
   histKey: keyof TasasHistoricas;
   saveRate?: string; // metrica del rate
   saveCount?: string; // metrica del count
 }
 
 const LINKS: LinkMeta[] = [
-  { key: "cobrado", rateLabel: "% cobrado al cierre", countLabel: "Facturación", isRatio: true, countMoney: true, histKey: "pct_cobrado", saveCount: "facturacion" },
-  { key: "aov", rateLabel: "AOV (ticket)", countLabel: "Ventas", isRatio: false, rateMoney: true, histKey: "aov", saveRate: "aov", saveCount: "ventas" },
+  { key: "aov", rateLabel: "AOV cash (plata real / venta)", countLabel: "Ventas", isRatio: false, rateMoney: true, histKey: "aov_cash", saveRate: "aov", saveCount: "ventas" },
   { key: "close", rateLabel: "Close rate", countLabel: "Atendidas", isRatio: true, histKey: "close_rate", saveRate: "close_rate" },
   { key: "show", rateLabel: "Show rate", countLabel: "Agendas", isRatio: true, histKey: "show_rate", saveRate: "show_rate", saveCount: "agendas" },
   { key: "agenda", rateLabel: "Tasa de agenda", countLabel: "Leads", isRatio: true, histKey: "tasa_agenda", saveRate: "tasa_agenda", saveCount: "leads" },
 ];
+
+const VENTANAS = [30, 60, 90] as const;
 
 type LinkState = { rate: string; count: string; pinned: boolean };
 
@@ -51,7 +51,6 @@ export function MetasCascade({
   periodo,
   historico,
   actuales,
-  cashActual,
   leadsActual,
   daysLeft,
   isCurrent,
@@ -59,26 +58,49 @@ export function MetasCascade({
   periodo: string;
   historico: TasasHistoricas;
   actuales: Record<string, number>;
-  cashActual: number;
   leadsActual: number;
   daysLeft: number;
   isCurrent: boolean;
 }) {
   const [cash, setCash] = useState(actuales.cash_collected != null ? String(actuales.cash_collected) : "");
+  const [dias, setDias] = useState<number>(90);
+  const [hist, setHist] = useState<TasasHistoricas>(historico);
   const [links, setLinks] = useState<Record<LinkKey, LinkState>>(() => {
     const init = (l: LinkMeta): LinkState => {
       const saved = l.saveRate ? actuales[l.saveRate] : undefined;
-      const hist = historico[l.histKey];
-      const rate = saved != null ? saved : hist;
+      const h = historico[l.histKey];
+      const rate = saved != null ? saved : h;
       return { rate: rate != null ? String(rate) : "", count: "", pinned: false };
     };
     return Object.fromEntries(LINKS.map((l) => [l.key, init(l)])) as Record<LinkKey, LinkState>;
   });
   const [pending, start] = useTransition();
+  const [pendingHist, startHist] = useTransition();
+
+  // Cambiar la ventana recalcula el histórico en la base y reprellena los
+  // supuestos NO fijados (los pineados a mano se respetan).
+  function aplicarVentana(nd: number) {
+    setDias(nd);
+    startHist(async () => {
+      const t = await getTasasHistoricas(nd);
+      setHist(t);
+      setLinks((s) => {
+        const next = { ...s };
+        for (const L of LINKS) {
+          if (!next[L.key].pinned) {
+            const h = t[L.histKey];
+            next[L.key] = { ...next[L.key], rate: h != null ? String(h) : "" };
+          }
+        }
+        return next;
+      });
+    });
+  }
 
   const casc = useMemo(() => {
+    const rows: { L: LinkMeta; rate: number; count: number; bad: boolean }[] = [];
     let upstream = Number(cash);
-    const rows = LINKS.map((L) => {
+    for (const L of LINKS) {
       const st = links[L.key];
       let rate: number, count: number;
       if (st.pinned) {
@@ -90,8 +112,8 @@ export function MetasCascade({
       }
       const bad = !isFinite(count) || !isFinite(rate) || rate <= 0 || (L.isRatio && rate > 1);
       upstream = count;
-      return { L, rate, count, bad };
-    });
+      rows.push({ L, rate, count, bad });
+    }
     const impossible = rows.some((r) => r.bad) || !(Number(cash) > 0);
     return { rows, leads: upstream, impossible };
   }, [cash, links]);
@@ -140,11 +162,30 @@ export function MetasCascade({
         <Input inputMode="decimal" className="font-mono" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="6000" />
       </div>
 
+      {/* Ventana del histórico para prellenar los supuestos */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="micro-label">Histórico para prellenar</span>
+        <div className="flex gap-1">
+          {VENTANAS.map((d) => (
+            <Button
+              key={d}
+              size="sm"
+              variant={d === dias ? "secondary" : "ghost"}
+              disabled={pendingHist}
+              onClick={() => aplicarVentana(d)}
+            >
+              {d}d
+            </Button>
+          ))}
+        </div>
+        {pendingHist && <span className="font-mono text-[11px] text-[var(--text-muted)]">recalculando…</span>}
+      </div>
+
       {/* Cascada */}
       <div className="rounded-md border border-border">
         {casc.rows.map(({ L, rate, count, bad }) => {
           const st = links[L.key];
-          const hist = historico[L.histKey];
+          const h = hist[L.histKey];
           return (
             <div
               key={L.key}
@@ -164,7 +205,7 @@ export function MetasCascade({
                   />
                 )}
                 <div className="font-mono text-[11px] text-[var(--text-muted)]">
-                  histórico 90d: {hist == null ? "sin datos" : fmtRate(hist, L.rateMoney)}
+                  histórico {dias}d: {h == null ? "sin datos" : fmtRate(h, L.rateMoney)}
                 </div>
               </div>
 

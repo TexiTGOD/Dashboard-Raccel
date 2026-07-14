@@ -62,6 +62,10 @@ export const DEFS: Record<string, MetricDef> = {
     definicion: "Ticket promedio del período.",
     formula: "facturación / ventas",
   },
+  aov_cash: {
+    definicion: "Plata real que entra por venta. Ya captura el efecto de las cuotas (un pago de 700 y otro de 1.500 → 1.100). Es el supuesto de plata de la cascada de metas.",
+    formula: "SUM(payments.monto) / COUNT(DISTINCT ventas con al menos un pago), en la ventana",
+  },
   cash_por_lead: {
     definicion: "Cuánta plata trajo cada lead de esa pieza. La única que importa para decidir qué contenido hacer.",
     formula: "cash_collected / leads (por pieza)",

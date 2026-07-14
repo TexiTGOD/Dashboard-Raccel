@@ -37,7 +37,6 @@ export default async function MetasPage({
             periodo={period.startStr}
             historico={historico}
             actuales={actuales}
-            cashActual={K.cash_collected}
             leadsActual={K.leads}
             daysLeft={period.daysLeft}
             isCurrent={period.isCurrent}

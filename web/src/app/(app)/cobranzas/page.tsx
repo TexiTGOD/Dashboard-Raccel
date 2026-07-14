@@ -11,13 +11,17 @@ import { PageHeader } from "../operaciones/_components/page-header";
 const usd = (n: number | null) => fmtMonto(n, "USD");
 
 interface CuotaPeriodo {
-  cuota_id: string; numero_cuota: number; monto_esperado: number; fecha_vencimiento: string;
-  cobrada: boolean; comprador: string | null; producto: string | null; booking_id: string | null;
+  cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
+  fecha_vencimiento: string; cobrada: boolean; comprador: string | null; producto: string | null; booking_id: string | null;
 }
 interface MoraRow {
-  cuota_id: string; numero_cuota: number; monto_esperado: number; fecha_vencimiento: string;
-  dias_vencida: number; comprador: string | null; producto: string | null; booking_id: string | null;
+  cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
+  fecha_vencimiento: string; dias_vencida: number; comprador: string | null; producto: string | null; booking_id: string | null;
 }
+
+// "pago único" cuando la venta es de 1 cuota; si no, "cuota N/total".
+const etiquetaCuota = (n: number, total: number | null) =>
+  total != null && total <= 1 ? "pago único" : `cuota ${n}${total ? `/${total}` : ""}`;
 
 function Fila({
   href, izq, sub, monto, extra,
@@ -94,7 +98,7 @@ export default async function CobranzasPage({
               <Fila
                 key={c.cuota_id}
                 href={c.booking_id ? `/closer/${c.booking_id}` : null}
-                izq={`${c.comprador ?? "—"} · cuota ${c.numero_cuota}`}
+                izq={`${c.comprador ?? "—"} · ${etiquetaCuota(c.numero_cuota, c.cuotas_total)}`}
                 sub={`${c.producto ?? ""} · venció ${fmtFecha(c.fecha_vencimiento)}`}
                 monto={Number(c.monto_esperado)}
                 extra={<span className="text-danger">{c.dias_vencida}d</span>}
@@ -116,7 +120,7 @@ export default async function CobranzasPage({
               <Fila
                 key={c.cuota_id}
                 href={c.booking_id ? `/closer/${c.booking_id}` : null}
-                izq={`${c.comprador ?? "—"} · cuota ${c.numero_cuota}`}
+                izq={`${c.comprador ?? "—"} · ${etiquetaCuota(c.numero_cuota, c.cuotas_total)}`}
                 sub={`${c.producto ?? ""} · vence ${fmtFecha(c.fecha_vencimiento)}`}
                 monto={Number(c.monto_esperado)}
               />

@@ -8,7 +8,7 @@ export interface Kpis {
   agendas: number; atendidas: number;
   no_show: number; resueltas: number; pendientes: number; canceladas: number;
   ventas: number; ventas_atribuibles: number; facturacion: number; cash_collected: number;
-  aov: number | null; tasa_calificacion: number | null; tasa_agenda: number | null;
+  aov: number | null; aov_cash: number | null; tasa_calificacion: number | null; tasa_agenda: number | null;
   show_rate: number | null; close_rate_atendidas: number | null; close_rate_agendadas: number | null;
 }
 
@@ -23,22 +23,24 @@ export async function loadKpis(sb: SupabaseClient, p: Period): Promise<Kpis> {
     pendientes: Number(k.pendientes ?? 0), canceladas: Number(k.canceladas ?? 0),
     ventas: Number(k.ventas ?? 0), ventas_atribuibles: Number(k.ventas_atribuibles ?? 0),
     facturacion: Number(k.facturacion ?? 0), cash_collected: Number(k.cash_collected ?? 0),
-    aov: num(k.aov), tasa_calificacion: num(k.tasa_calificacion), tasa_agenda: num(k.tasa_agenda),
+    aov: num(k.aov), aov_cash: num(k.aov_cash),
+    tasa_calificacion: num(k.tasa_calificacion), tasa_agenda: num(k.tasa_agenda),
     show_rate: num(k.show_rate), close_rate_atendidas: num(k.close_rate_atendidas),
     close_rate_agendadas: num(k.close_rate_agendadas),
   };
 }
 
 export interface TasasHistoricas {
-  pct_cobrado: number | null; aov: number | null; close_rate: number | null;
+  aov_cash: number | null; close_rate: number | null;
   show_rate: number | null; tasa_agenda: number | null;
 }
 
-export async function loadTasasHistoricas(sb: SupabaseClient): Promise<TasasHistoricas> {
-  const { data } = await sb.rpc("dashboard_tasas_historicas");
+// dias = ventana del histórico (30 / 60 / 90). 90 = más estable.
+export async function loadTasasHistoricas(sb: SupabaseClient, dias = 90): Promise<TasasHistoricas> {
+  const { data } = await sb.rpc("dashboard_tasas_historicas", { p_dias: dias });
   const t = data?.[0] ?? {};
   return {
-    pct_cobrado: num(t.pct_cobrado), aov: num(t.aov), close_rate: num(t.close_rate),
+    aov_cash: num(t.aov_cash), close_rate: num(t.close_rate),
     show_rate: num(t.show_rate), tasa_agenda: num(t.tasa_agenda),
   };
 }

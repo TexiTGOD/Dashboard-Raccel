@@ -25,6 +25,10 @@ export function CuotasPanel({
   const [pending, start] = useTransition();
   const [marcando, setMarcando] = useState<string | null>(null);
 
+  // Una sola cuota = pago único (no "Cuota 1", que sugiere que hay más).
+  const pagoUnico = cuotas.length === 1;
+  const etiqueta = (c: Cuota) => (pagoUnico ? "Pago único" : `Cuota ${c.numero_cuota}`);
+
   function marcar(c: Cuota) {
     setMarcando(c.id);
     start(async () => {
@@ -40,7 +44,7 @@ export function CuotasPanel({
       });
       setMarcando(null);
       if ("error" in res) toast.error("No se pudo registrar: " + res.error);
-      else toast.success(`Cuota ${c.numero_cuota} cobrada`);
+      else toast.success(pagoUnico ? "Pago cobrado" : `Cuota ${c.numero_cuota} cobrada`);
     });
   }
 
@@ -57,7 +61,7 @@ export function CuotasPanel({
           return (
             <li key={c.id} className="flex items-center justify-between gap-3 py-2 font-mono text-sm">
               <span className="text-muted-foreground">
-                Cuota {c.numero_cuota} · vence {fmtFecha(c.fecha_vencimiento)}
+                {etiqueta(c)} · vence {fmtFecha(c.fecha_vencimiento)}
               </span>
               <span className="flex items-center gap-3">
                 <span className="text-foreground">{fmtMonto(c.monto_esperado, moneda)}</span>

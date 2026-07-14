@@ -2,8 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { loadTasasHistoricas, type TasasHistoricas } from "@/lib/dashboard";
 
 type Result = { ok: true } | { error: string };
+
+// Recalcula en vivo el histórico de los supuestos para una ventana (30/60/90 días).
+// Cálculo en la base (dashboard_tasas_historicas); acá solo se re-consulta.
+export async function getTasasHistoricas(dias: number): Promise<TasasHistoricas> {
+  const supabase = await createClient();
+  return loadTasasHistoricas(supabase, dias);
+}
 
 // Upsert de una meta (objetivo) para un período+métrica. Solo admin (RLS).
 export async function upsertMeta(input: {
