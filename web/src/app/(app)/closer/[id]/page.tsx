@@ -6,12 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EstadoBadge } from "../_components/badges";
 import { OutcomeForm } from "./outcome-form";
 import { ManualSaleForm } from "./manual-sale-form";
-import { AddPaymentForm } from "./add-payment-form";
+import { CuotasPanel } from "./cuotas-panel";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
-import type { Booking, Call, Lead, Payment, Sale } from "@/lib/types";
+import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
 
-type SaleWithPayments = Sale & { payments: Payment[] | null };
+type SaleWithPayments = Sale & { payments: Payment[] | null; cuotas: Cuota[] | null };
 type BookingDetail = Booking & {
   lead: Lead | null;
   calls: Call[] | null;
@@ -47,7 +47,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
 
   const { data } = await supabase
     .from("bookings")
-    .select("*, lead:leads(*), calls(*), sales(*, payments(*))")
+    .select("*, lead:leads(*), calls(*), sales(*, payments(*), cuotas(*))")
     .eq("id", id)
     .maybeSingle();
 
@@ -60,6 +60,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     .slice()
     .sort((a, b) => (a.numero_cuota ?? 999) - (b.numero_cuota ?? 999));
   const cashCollected = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+  const cuotas = (sale?.cuotas ?? []).slice().sort((a, b) => a.numero_cuota - b.numero_cuota);
   // No se puede cargar una venta si la llamada todavía no ocurrió.
   const bookingFutura = b.fecha_llamada ? new Date(b.fecha_llamada).getTime() > Date.now() : false;
 
@@ -154,36 +155,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                   <Field label="Status" mono>{sale.status}</Field>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="micro-label">Pagos</div>
-                  {payments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sin pagos registrados.</p>
-                  ) : (
-                    <ul className="divide-y divide-border">
-                      {payments.map((p) => (
-                        <li
-                          key={p.id}
-                          className="flex items-center justify-between gap-3 py-2 font-mono text-sm"
-                        >
-                          <span className="text-muted-foreground">
-                            {p.numero_cuota ? `Cuota ${p.numero_cuota}` : "Pago"} · {p.metodo_pago}
-                          </span>
-                          <span className="flex items-center gap-3">
-                            <span className="text-[var(--text-muted)]">{fmtFecha(p.fecha)}</span>
-                            <span className="text-foreground">{fmtMonto(p.monto, p.moneda)}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <AddPaymentForm
-                  bookingId={b.id}
-                  saleId={sale.id}
-                  moneda={sale.moneda ?? "USD"}
-                  nextCuota={payments.length + 1}
-                />
+                <CuotasPanel bookingId={b.id} moneda={sale.moneda ?? "USD"} cuotas={cuotas} />
               </div>
             ) : (
               <ManualSaleForm

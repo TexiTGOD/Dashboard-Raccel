@@ -27,7 +27,7 @@ export default async function HoyPage({
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  const [K, metas, pendRes, ventasRes] = await Promise.all([
+  const [K, metas, pendRes, ventasRes, moraRes] = await Promise.all([
     loadKpis(supabase, period),
     loadMetas(supabase, period),
     supabase
@@ -37,10 +37,15 @@ export default async function HoyPage({
       .lt("fecha_llamada", nowIso)
       .order("fecha_llamada", { ascending: true }),
     supabase.from("sales").select("id").eq("matcheada", false),
+    supabase.rpc("dashboard_mora"),
   ]);
 
   const pendientes = ((pendRes.data ?? []) as unknown as PendRow[]).filter((b) => !b.lead?.crisis);
   const ventasSinMatchear = (ventasRes.data ?? []).length;
+  const mora = (moraRes.data ?? []) as {
+    cuota_id: string; numero_cuota: number; monto_esperado: number; fecha_vencimiento: string;
+    dias_vencida: number; comprador: string | null; booking_id: string | null;
+  }[];
 
   // Ritmo del mes contra la meta de cash.
   const cashMeta = metas.find((m) => m.metrica === "cash_collected")?.objetivo ?? null;
@@ -121,10 +126,42 @@ export default async function HoyPage({
       </section>
 
       <section>
-        <h2 className="section-title mb-3 border-b border-border pb-2">Cuotas vencidas</h2>
-        <p className="text-sm text-muted-foreground">
-          Disponible cuando esté el plan de cuotas (Cobranzas · T2.2).
-        </p>
+        <h2 className="section-title mb-3 border-b border-border pb-2">Cuotas vencidas ({mora.length})</h2>
+        {mora.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Sin cuotas vencidas.</p>
+        ) : (
+          <div className="space-y-2">
+            {mora.slice(0, 8).map((c) => {
+              const inner = (
+                <Card className="gap-0 py-0 transition-colors hover:border-primary/40 hover:bg-[var(--neon-wash)]">
+                  <CardContent className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm text-foreground">
+                        {c.comprador ?? "—"} · cuota {c.numero_cuota}
+                      </div>
+                      <div className="truncate font-mono text-xs text-muted-foreground">
+                        venció {fmtFecha(c.fecha_vencimiento)} · <span className="text-danger">{c.dias_vencida}d</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 font-mono text-sm text-foreground">
+                      {fmtMonto(c.monto_esperado, "USD")}
+                    </span>
+                  </CardContent>
+                </Card>
+              );
+              return c.booking_id ? (
+                <Link key={c.cuota_id} href={`/closer/${c.booking_id}`} className="block">{inner}</Link>
+              ) : (
+                <div key={c.cuota_id}>{inner}</div>
+              );
+            })}
+            {mora.length > 8 && (
+              <Link href="/cobranzas" className="block font-mono text-xs text-primary">
+                ver todas en Cobranzas →
+              </Link>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

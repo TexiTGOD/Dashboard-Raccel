@@ -121,10 +121,16 @@ async function main() {
     })
     .select("id")
     .single();
-  await sb.from("payments").insert({
-    sale_id: saleBea.id, monto: 750, moneda: "USD", fecha: dias(-1),
-    metodo_pago: "transferencia", numero_cuota: 1,
-  });
+  const { data: payBea } = await sb
+    .from("payments")
+    .insert({
+      sale_id: saleBea.id, monto: 750, moneda: "USD", fecha: dias(-1),
+      metodo_pago: "transferencia", numero_cuota: 1,
+    })
+    .select("id")
+    .single();
+  // Linkear la cuota 1 (el trigger ya generó el plan de 2 cuotas al crear la venta).
+  if (payBea) await sb.from("cuotas").update({ payment_id: payBea.id }).eq("sale_id", saleBea.id).eq("numero_cuota", 1);
   // Sin matchear: email que no coincide con ninguna agenda (queda para conciliar).
   await sb.from("sales").insert({
     email_comprador: "otramail@gmail.com", nombre_comprador: "Compradora Anónima",

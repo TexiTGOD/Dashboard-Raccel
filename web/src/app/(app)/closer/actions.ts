@@ -105,17 +105,62 @@ export async function createManualSale(input: {
     .single();
   if (error) return { error: error.message };
 
-  const { error: pErr } = await supabase.from("payments").insert({
-    sale_id: sale.id,
-    monto: input.primer_pago_monto,
-    moneda,
-    fecha: new Date().toISOString(),
-    metodo_pago: input.primer_pago_metodo,
-    numero_cuota: 1,
-  });
+  const { data: pay, error: pErr } = await supabase
+    .from("payments")
+    .insert({
+      sale_id: sale.id,
+      monto: input.primer_pago_monto,
+      moneda,
+      fecha: new Date().toISOString(),
+      metodo_pago: input.primer_pago_metodo,
+      numero_cuota: 1,
+    })
+    .select("id")
+    .single();
   if (pErr) return { error: pErr.message };
 
+  // El trigger ya generó las cuotas esperadas; marcamos la cuota 1 como cobrada.
+  await supabase.from("cuotas").update({ payment_id: pay.id }).eq("sale_id", sale.id).eq("numero_cuota", 1);
+
   revalidatePath(`/closer/${input.bookingId}`);
+  return { ok: true };
+}
+
+// Marca una cuota esperada como cobrada: crea el payment y lo linkea a la cuota.
+export async function marcarCuotaCobrada(input: {
+  bookingId: string;
+  saleId: string;
+  cuotaId: string;
+  numeroCuota: number;
+  monto: number;
+  moneda: string;
+  metodo_pago: MetodoPago;
+  fecha: string; // ISO
+}): Promise<Result> {
+  const supabase = await createClient();
+  const { data: pay, error } = await supabase
+    .from("payments")
+    .insert({
+      sale_id: input.saleId,
+      monto: input.monto,
+      moneda: input.moneda || "USD",
+      fecha: input.fecha || new Date().toISOString(),
+      metodo_pago: input.metodo_pago,
+      numero_cuota: input.numeroCuota,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  const { error: cErr } = await supabase
+    .from("cuotas")
+    .update({ payment_id: pay.id })
+    .eq("id", input.cuotaId);
+  if (cErr) return { error: cErr.message };
+
+  revalidatePath(`/closer/${input.bookingId}`);
+  revalidatePath("/cobranzas");
+  revalidatePath("/hoy");
   return { ok: true };
 }
 

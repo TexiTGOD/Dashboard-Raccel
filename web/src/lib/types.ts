@@ -119,3 +119,12 @@ export interface Payment {
   hotmart_transaction_id: string | null;
   numero_cuota: number | null;
 }
+
+export interface Cuota {
+  id: string;
+  sale_id: string;
+  numero_cuota: number;
+  monto_esperado: number | null;
+  fecha_vencimiento: string | null;
+  payment_id: string | null; // null = pendiente
+}
