@@ -70,6 +70,10 @@ async function main() {
   // Cualquier venta colgada de un booking demo (evita contradicciones tipo Eve). Payments caen por cascade.
   if (prevIds.length) await sb.from("sales").delete().in("booking_id", prevIds);
   if (prevIds.length) await sb.from("calls").delete().in("booking_id", prevIds);
+  // Ventas huérfanas de leads demo (cargadas a mano sin vincular, tipo Eve). Payments caen por cascade.
+  const { data: prevLeads } = await sb.from("leads").select("id").like("manychat_contact_id", "demo_%");
+  const prevLeadIds = (prevLeads ?? []).map((l) => l.id);
+  if (prevLeadIds.length) await sb.from("sales").delete().in("lead_id", prevLeadIds);
   await sb.from("bookings").delete().like("calendly_event_id", "demo_%");
   await sb.from("leads").delete().like("manychat_contact_id", "demo_%");
 

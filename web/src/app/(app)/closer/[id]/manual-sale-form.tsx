@@ -20,13 +20,24 @@ export function ManualSaleForm({
   leadId,
   defaultEmail,
   defaultNombre,
+  bookingFutura,
 }: {
   bookingId: string;
   leadId: string | null;
   defaultEmail: string;
   defaultNombre: string;
+  bookingFutura?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+
+  // No se puede cerrar una venta contra una llamada que todavía no ocurrió.
+  if (bookingFutura) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        La llamada todavía no ocurrió: no se puede cargar una venta hasta que pase.
+      </p>
+    );
+  }
   const [email, setEmail] = useState(defaultEmail);
   const [nombre, setNombre] = useState(defaultNombre);
   const [producto, setProducto] = useState("");

@@ -60,6 +60,8 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     .slice()
     .sort((a, b) => (a.numero_cuota ?? 999) - (b.numero_cuota ?? 999));
   const cashCollected = payments.reduce((sum, p) => sum + (Number(p.monto) || 0), 0);
+  // No se puede cargar una venta si la llamada todavía no ocurrió.
+  const bookingFutura = b.fecha_llamada ? new Date(b.fecha_llamada).getTime() > Date.now() : false;
 
   return (
     <div className="space-y-6">
@@ -189,6 +191,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 leadId={b.lead_id}
                 defaultEmail={b.email ?? ""}
                 defaultNombre={lead?.nombre ?? b.nombre ?? ""}
+                bookingFutura={bookingFutura}
               />
             )}
           </Panel>
