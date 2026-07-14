@@ -23,6 +23,24 @@ export async function upsertMeta(input: {
   return { ok: true };
 }
 
+// Guarda todas las metas derivadas de la cascada en un solo upsert.
+export async function guardarMetas(input: {
+  periodo: string;
+  values: Record<string, number>;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const rows = Object.entries(input.values)
+    .filter(([, v]) => Number.isFinite(v))
+    .map(([metrica, objetivo]) => ({ periodo: input.periodo, metrica, objetivo }));
+  if (rows.length === 0) return { ok: true };
+  const { error } = await supabase.from("metas").upsert(rows, { onConflict: "periodo,metrica" });
+  if (error) return { error: error.message };
+  revalidatePath("/metas");
+  revalidatePath("/operaciones");
+  revalidatePath("/hoy");
+  return { ok: true };
+}
+
 // Carga de un gasto del período. Solo admin (RLS).
 export async function addGasto(input: {
   periodo: string;

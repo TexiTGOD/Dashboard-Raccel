@@ -4,7 +4,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { periodFromParam } from "@/lib/period";
 import { loadKpis, loadMetas } from "@/lib/dashboard";
-import { fmtFecha, fmtMonto } from "@/lib/format";
+import { fmtFecha, fmtMonto, fmtDec } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "../operaciones/_components/page-header";
 
@@ -47,13 +47,44 @@ export default async function HoyPage({
     dias_vencida: number; comprador: string | null; booking_id: string | null;
   }[];
 
-  // Ritmo del mes contra la meta de cash.
-  const cashMeta = metas.find((m) => m.metrica === "cash_collected")?.objetivo ?? null;
-  const falta = cashMeta != null ? Math.max(Number(cashMeta) - K.cash_collected, 0) : 0;
-  const ritmo =
-    cashMeta != null && period.isCurrent && period.daysLeft > 0 && falta > 0
-      ? falta / period.daysLeft
-      : null;
+  // Ritmo del mes: cascada desde el gap de cash, en unidades de negocio.
+  const metaOf = (m: string) => {
+    const r = metas.find((x) => x.metrica === m);
+    return r ? Number(r.objetivo) : null;
+  };
+  const cashMeta = metaOf("cash_collected");
+  const gap = cashMeta != null ? Math.max(cashMeta - K.cash_collected, 0) : null;
+  // tasa del período (K) con fallback al supuesto de la meta.
+  const tasa = (kv: number | null, mk: string): { v: number | null; sup: boolean } => {
+    if (kv != null && kv > 0) return { v: kv, sup: false };
+    const m = metaOf(mk);
+    return m != null && m > 0 ? { v: m, sup: true } : { v: null, sup: false };
+  };
+  const pctCobrado =
+    K.facturacion > 0
+      ? { v: K.cash_collected / K.facturacion, sup: false }
+      : (() => {
+          const f = metaOf("facturacion");
+          return f && cashMeta ? { v: cashMeta / f, sup: true } : { v: null as number | null, sup: false };
+        })();
+  const aovT = tasa(K.aov, "aov");
+  const closeT = tasa(K.close_rate_atendidas, "close_rate");
+  const showT = tasa(K.show_rate, "show_rate");
+  const agendaT = tasa(K.tasa_agenda, "tasa_agenda");
+  let facturacionGap: number | null = null,
+    ventasGap: number | null = null,
+    atendidasGap: number | null = null,
+    agendasGap: number | null = null,
+    leadsGap: number | null = null;
+  if (gap != null && gap > 0) {
+    if (pctCobrado.v) facturacionGap = gap / pctCobrado.v;
+    if (facturacionGap != null && aovT.v) ventasGap = facturacionGap / aovT.v;
+    if (ventasGap != null && closeT.v) atendidasGap = ventasGap / closeT.v;
+    if (atendidasGap != null && showT.v) agendasGap = atendidasGap / showT.v;
+    if (agendasGap != null && agendaT.v) leadsGap = agendasGap / agendaT.v;
+  }
+  const algunSupuesto = [pctCobrado, aovT, closeT, showT, agendaT].some((t) => t.sup);
+  const dl = period.daysLeft;
 
   return (
     <div className="tabular-nums">
@@ -63,17 +94,38 @@ export default async function HoyPage({
         <CardContent className="py-4">
           {cashMeta == null ? (
             <p className="text-sm text-muted-foreground">Cargá una meta de cash en Metas para ver el ritmo.</p>
-          ) : ritmo == null ? (
+          ) : gap === 0 ? (
             <p className="font-mono text-sm text-foreground">
-              Cash {fmtMonto(K.cash_collected, "USD")} de {fmtMonto(Number(cashMeta), "USD")}
-              {falta === 0 ? " — meta cumplida ✓" : ""}
+              Meta de cash cumplida ✓ ({fmtMonto(K.cash_collected, "USD")} de {fmtMonto(cashMeta, "USD")}).
+            </p>
+          ) : ventasGap == null ? (
+            <p className="text-sm text-muted-foreground">
+              Te faltan {fmtMonto(gap ?? 0, "USD")} de cash, pero no hay tasas suficientes (ni del período ni
+              supuestos en Metas) para traducirlo a unidades de negocio.
             </p>
           ) : (
-            <p className="font-mono text-sm text-foreground">
-              Necesitás <span className="text-primary">{fmtMonto(ritmo, "USD")}/día</span> de cash para llegar a la
-              meta. Vas {fmtMonto(K.cash_collected, "USD")} de {fmtMonto(Number(cashMeta), "USD")} · quedan{" "}
-              {period.daysLeft} días.
-            </p>
+            <div className="space-y-1 font-mono text-sm text-foreground">
+              <p>
+                Te faltan <span className="text-primary">{fmtMonto(gap ?? 0, "USD")}</span> → {fmtDec(ventasGap)}{" "}
+                ventas → {atendidasGap != null ? fmtDec(atendidasGap) : "—"} atendidas →{" "}
+                {agendasGap != null ? fmtDec(agendasGap) : "—"} agendas
+                {leadsGap != null && <> → {fmtDec(leadsGap)} leads</>}.
+              </p>
+              {period.isCurrent && dl > 0 && (agendasGap != null || leadsGap != null) && (
+                <p className="text-muted-foreground">
+                  Quedan {dl} días →{" "}
+                  {agendasGap != null && (
+                    <span className="text-primary">{fmtDec(agendasGap / dl)} agendas/día</span>
+                  )}
+                  {leadsGap != null && <> · {fmtDec(leadsGap / dl)} leads/día</>}.
+                </p>
+              )}
+              {algunSupuesto && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  * algunas tasas usan el supuesto de la meta (no hay dato suficiente del período).
+                </p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

@@ -63,6 +63,7 @@ export default async function OperacionesPage({
               ) : (
                 (() => {
                   const incompleto = f.label === "Show-up rate" && K.pendientes > 0;
+                  const esCalif = f.label === "% Calificación";
                   return (
                     <div key={i} className="flex items-center justify-between border-l-2 border-border py-1 pl-4">
                       <MetricLabel label={f.label} def={f.def} />
@@ -72,6 +73,9 @@ export default async function OperacionesPage({
                           {incompleto ? "*" : ""}
                         </span>
                         {incompleto && <span className="ml-2 text-warning">· {K.pendientes} sin desenlace</span>}
+                        {esCalif && K.sin_responder > 0 && (
+                          <span className="ml-2 text-[var(--text-muted)]">· {K.sin_responder} sin responder</span>
+                        )}
                       </span>
                     </div>
                   );
