@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadGastos } from "@/lib/dashboard";
 import { fmtMonto } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,13 +13,17 @@ const usd = (n: number | null) => fmtMonto(n, "USD");
 export default async function PlataNetaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
-  const [K, gastos] = await Promise.all([loadKpis(supabase, period), loadGastos(supabase, period)]);
+  // Gastos son mensuales: solo se cargan/muestran si el rango es un mes completo.
+  const [K, gastos] = await Promise.all([
+    loadKpis(supabase, period),
+    period.esMesCompleto ? loadGastos(supabase, period.mesInicioStr) : Promise.resolve([]),
+  ]);
 
   const totalGastos = gastos.reduce((s, g) => s + (Number(g.monto) || 0), 0);
   const neto = K.cash_collected - totalGastos;
@@ -32,7 +36,7 @@ export default async function PlataNetaPage({
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Plata neta" periodo={period.periodo} />
+      <PageHeader title="Plata neta" period={period} />
       <Card>
         <CardContent className="space-y-5 py-5">
           <div className="grid gap-5 sm:grid-cols-3">
@@ -42,27 +46,40 @@ export default async function PlataNetaPage({
             </div>
             <div>
               <div className="micro-label">Gastos</div>
-              <div className="mt-1 font-mono text-2xl text-foreground">{usd(totalGastos)}</div>
+              <div className="mt-1 font-mono text-2xl text-foreground">
+                {period.esMesCompleto ? usd(totalGastos) : "—"}
+              </div>
             </div>
             <div>
               <div className="micro-label">Ingreso neto</div>
-              <div className="mt-1 font-mono text-2xl text-foreground">{usd(neto)}</div>
+              <div className="mt-1 font-mono text-2xl text-foreground">
+                {period.esMesCompleto ? usd(neto) : "—"}
+              </div>
             </div>
           </div>
-          {porCat.length > 0 && (
-            <div className="space-y-1 border-t border-border pt-3">
-              {porCat.map(([cat, monto]) => (
-                <div key={cat} className="flex justify-between font-mono text-sm">
-                  <span className="capitalize text-muted-foreground">{cat}</span>
-                  <span className="text-foreground">{usd(monto)}</span>
+
+          {!period.esMesCompleto ? (
+            <p className="border-t border-border pt-3 font-mono text-xs text-[var(--text-muted)]">
+              Gastos y neto son mensuales — elegí un mes calendario completo para verlos y cargar gastos.
+            </p>
+          ) : (
+            <>
+              {porCat.length > 0 && (
+                <div className="space-y-1 border-t border-border pt-3">
+                  {porCat.map(([cat, monto]) => (
+                    <div key={cat} className="flex justify-between font-mono text-sm">
+                      <span className="capitalize text-muted-foreground">{cat}</span>
+                      <span className="text-foreground">{usd(monto)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+              <div className="border-t border-border pt-4">
+                <div className="micro-label mb-3">Cargar gasto</div>
+                <GastosForm periodo={period.mesInicioStr} />
+              </div>
+            </>
           )}
-          <div className="border-t border-border pt-4">
-            <div className="micro-label mb-3">Cargar gasto</div>
-            <GastosForm periodo={period.startStr} />
-          </div>
         </CardContent>
       </Card>
     </div>

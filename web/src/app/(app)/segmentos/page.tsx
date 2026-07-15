@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadRpc } from "@/lib/dashboard";
 import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
 import { fmtInt, fmtPct } from "@/lib/format";
@@ -14,11 +14,11 @@ const MIN_N = 5;
 export default async function SegmentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const [dolores, conciencias] = await Promise.all([
     loadRpc(supabase, "dashboard_por_dolor", period) as Promise<
@@ -31,7 +31,7 @@ export default async function SegmentosPage({
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Segmentos" periodo={period.periodo} />
+      <PageHeader title="Segmentos" period={period} />
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <h2 className="section-title mb-3 border-b border-border pb-2">Por dolor</h2>

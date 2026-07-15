@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadMetas } from "@/lib/dashboard";
 import { fmtFecha, fmtMonto, fmtDec } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,17 +19,17 @@ interface PendRow {
 export default async function HoyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
   const [K, metas, pendRes, ventasRes, moraRes] = await Promise.all([
     loadKpis(supabase, period),
-    loadMetas(supabase, period),
+    loadMetas(supabase, period.mesInicioStr),
     supabase
       .from("bookings")
       .select("id, fecha_llamada, nombre, closer, lead:leads(nombre, crisis)")
@@ -84,11 +84,15 @@ export default async function HoyPage({
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Hoy" periodo={period.periodo} />
+      <PageHeader title="Hoy" period={period} />
 
       <Card className="mb-6">
         <CardContent className="py-4">
-          {cashMeta == null ? (
+          {!period.esMesCompleto ? (
+            <p className="text-sm text-muted-foreground">
+              El ritmo aplica a meses calendario completos. Elegí un mes (preset “Este mes”).
+            </p>
+          ) : cashMeta == null ? (
             <p className="text-sm text-muted-foreground">Cargá una meta de cash en Metas para ver el ritmo.</p>
           ) : gap === 0 ? (
             <p className="font-mono text-sm text-foreground">

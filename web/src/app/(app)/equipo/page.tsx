@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadRpc } from "@/lib/dashboard";
 import { fmtInt, fmtMonto, fmtPct } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,11 +13,11 @@ const usd = (n: number | null) => fmtMonto(n, "USD");
 export default async function EquipoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const [K, closers] = await Promise.all([
     loadKpis(supabase, period),
@@ -31,7 +31,7 @@ export default async function EquipoPage({
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Equipo" periodo={period.periodo} />
+      <PageHeader title="Equipo" period={period} />
       <Card>
         <CardContent className="overflow-x-auto py-4">
           <Table>

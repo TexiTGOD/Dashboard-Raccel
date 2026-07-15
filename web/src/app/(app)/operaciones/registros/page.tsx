@@ -1,21 +1,20 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { Card, CardContent } from "@/components/ui/card";
-import { PeriodSelector } from "../_components/period-selector";
+import { RangePicker } from "../_components/period-selector";
 import { RegistrosTables } from "./registros-tables";
 
 export default async function RegistrosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
 
-  const sp = await searchParams;
-  const period = periodFromParam(sp.periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const args = { p_start: period.startStr, p_end: period.endStr };
 
@@ -35,7 +34,7 @@ export default async function RegistrosPage({
             El detalle fila por fila. El total de Pagos coincide con el Cash Collected del período.
           </p>
         </div>
-        <PeriodSelector value={period.periodo} />
+        <RangePicker period={period} />
       </div>
 
       <Card>

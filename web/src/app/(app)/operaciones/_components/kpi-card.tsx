@@ -12,6 +12,7 @@ export function KpiCard({
   ritmoUnit,
   isCurrent,
   daysLeft,
+  mostrarMeta = true,
 }: {
   label: string;
   def?: MetricDef;
@@ -21,6 +22,7 @@ export function KpiCard({
   ritmoUnit: string;
   isCurrent: boolean;
   daysLeft: number;
+  mostrarMeta?: boolean; // false en rango custom: metas/ritmo son mensuales
 }) {
   const pct = meta && meta > 0 ? Math.min(value / meta, 1) : null;
   const falta = meta ? Math.max(meta - value, 0) : 0;
@@ -31,7 +33,7 @@ export function KpiCard({
       <CardContent className="space-y-3 py-5">
         <MetricLabel label={label} def={def} />
         <div className="font-mono text-3xl leading-none text-foreground">{fmt(value)}</div>
-        {meta != null ? (
+        {!mostrarMeta ? null : meta != null ? (
           <div className="space-y-1.5">
             <div className="h-1 w-full bg-[var(--surface-elevated)]">
               <div className="h-1 bg-primary" style={{ width: `${(pct ?? 0) * 100}%` }} />

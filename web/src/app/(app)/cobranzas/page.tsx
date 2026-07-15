@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadRpc } from "@/lib/dashboard";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,11 +48,11 @@ function Fila({
 export default async function CobranzasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
 
   const [cuotasPeriodo, moraRes] = await Promise.all([
@@ -68,7 +68,7 @@ export default async function CobranzasPage({
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Cobranzas" periodo={period.periodo} />
+      <PageHeader title="Cobranzas" period={period} />
 
       <section className="mb-8 grid gap-4 sm:grid-cols-3">
         <Card><CardContent className="py-5">

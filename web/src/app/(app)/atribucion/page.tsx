@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParam } from "@/lib/period";
+import { periodFromParams } from "@/lib/period";
 import { loadRpc } from "@/lib/dashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "../operaciones/_components/page-header";
@@ -10,17 +10,17 @@ import { AttributionTable } from "../operaciones/_components/attribution-table";
 export default async function AtribucionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
   const profile = await requireProfile();
   if (profile.rol !== "admin") redirect("/");
-  const period = periodFromParam((await searchParams).periodo);
+  const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const rows = await loadRpc(supabase, "dashboard_atribucion", period);
 
   return (
     <div className="tabular-nums">
-      <PageHeader title="Atribución por pieza" periodo={period.periodo} />
+      <PageHeader title="Atribución por pieza" period={period} />
       <Card>
         <CardContent className="py-4">
           <AttributionTable rows={rows as never} />
