@@ -43,12 +43,15 @@ export default async function SetterPage() {
   await requireProfile();
   const supabase = await createClient();
 
-  const [{ data: leadsData }, { count: agendas }] = await Promise.all([
+  const [{ data: leadsData }, { data: countsData }] = await Promise.all([
+    // Muestras para las listas (NO para contar). Las cifras salen del RPC agregado
+    // de abajo, que no tiene el límite de 1000 filas de PostgREST.
     supabase
       .from("leads")
       .select("id, nombre, ig_username, pieza_origen, estado_funnel")
-      .eq("crisis", false),
-    supabase.from("bookings").select("id", { count: "exact", head: true }),
+      .eq("crisis", false)
+      .order("fecha_primer_contacto", { ascending: false }),
+    supabase.rpc("dashboard_setter_pipeline"),
   ]);
 
   const leads = (leadsData ?? []) as LeadRow[];
@@ -59,10 +62,15 @@ export default async function SetterPage() {
     grupos.get(k)!.push(l);
   }
 
-  const totalLeads = leads.length;
-  const agendasN = agendas ?? 0;
+  // Conteos reales desde la base (count agregado, sin el cap de 1000). Fuente de
+  // verdad de los totales; las muestras de arriba solo alimentan las listas.
+  const cnt = (countsData?.[0] ?? {}) as Record<string, number | null>;
+  const count = (k: string) => Number(cnt[k] ?? 0);
+  const totalLeads = count("total");
+  const agendasN = count("agendas");
   const tasaAgenda = totalLeads > 0 ? agendasN / totalLeads : 0;
   const zonaGris = grupos.get("zona_gris") ?? [];
+  const zonaGrisCount = count("zona_gris");
 
   return (
     <div className="space-y-8">
@@ -90,9 +98,9 @@ export default async function SetterPage() {
       {/* Cola de atención: zona gris */}
       <section className="space-y-3">
         <h2 className="section-title border-b border-border pb-2">
-          Cola de atención · zona gris ({zonaGris.length})
+          Cola de atención · zona gris ({fmtInt(zonaGrisCount)})
         </h2>
-        {zonaGris.length === 0 ? (
+        {zonaGrisCount === 0 ? (
           <p className="text-sm text-muted-foreground">Nada esperando decisión.</p>
         ) : (
           <Card>
@@ -110,23 +118,24 @@ export default async function SetterPage() {
         <h2 className="section-title border-b border-border pb-2">Por estado</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {COLUMNAS.map((col) => {
-            const items = grupos.get(col.key) ?? [];
+            const shown = (grupos.get(col.key) ?? []).slice(0, 8);
+            const bucketCount = count(col.key); // total del bucket desde la base
             return (
               <Card key={col.key}>
                 <CardContent className="space-y-2 py-4">
                   <div className="flex items-baseline justify-between">
                     <span className="micro-label">{col.label}</span>
-                    <span className="font-mono text-lg text-foreground">{items.length}</span>
+                    <span className="font-mono text-lg text-foreground">{fmtInt(bucketCount)}</span>
                   </div>
                   <div>
-                    {items.length === 0 ? (
+                    {bucketCount === 0 ? (
                       <p className="text-xs text-muted-foreground">—</p>
                     ) : (
-                      items.slice(0, 8).map((l) => <LeadItem key={l.id} l={l} />)
+                      shown.map((l) => <LeadItem key={l.id} l={l} />)
                     )}
-                    {items.length > 8 && (
+                    {bucketCount > shown.length && (
                       <div className="pt-2 font-mono text-xs text-[var(--text-muted)]">
-                        +{items.length - 8} más
+                        +{fmtInt(bucketCount - shown.length)} más
                       </div>
                     )}
                   </div>
