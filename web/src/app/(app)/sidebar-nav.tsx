@@ -13,7 +13,7 @@ const byRol: Record<Rol, { href: string; label: string }[]> = {
     { href: "/equipo", label: "Equipo" },
     { href: "/cobranzas", label: "Cobranzas" },
     { href: "/metas", label: "Metas" },
-    { href: "/plata-neta", label: "Plata neta" },
+    { href: "/cashflow", label: "Cashflow" },
     { href: "/operaciones/registros", label: "Registros" },
     { href: "/closer", label: "Llamadas" },
     { href: "/closer/ventas-sin-matchear", label: "Ventas s/ matchear" },

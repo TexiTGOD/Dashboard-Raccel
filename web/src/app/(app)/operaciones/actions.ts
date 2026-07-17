@@ -49,21 +49,43 @@ export async function guardarMetas(input: {
   return { ok: true };
 }
 
-// Carga de un gasto del período. Solo admin (RLS).
+// Carga de un gasto con su fecha propia. Solo admin (RLS). `periodo` lo deriva
+// el trigger gastos_set_periodo desde `fecha`.
 export async function addGasto(input: {
-  periodo: string;
+  fecha: string; // YYYY-MM-DD
   categoria: string;
   concepto: string;
   monto: number;
 }): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("gastos").insert({
-    periodo: input.periodo,
+    fecha: input.fecha,
     categoria: input.categoria,
     concepto: input.concepto || null,
     monto: input.monto,
   });
   if (error) return { error: error.message };
-  revalidatePath("/operaciones");
+  revalidatePath("/cashflow");
+  return { ok: true };
+}
+
+// Edita un gasto existente (fecha, categoría, concepto o monto). Solo admin (RLS).
+export async function updateGasto(input: {
+  id: string;
+  patch: { fecha?: string; categoria?: string; concepto?: string | null; monto?: number };
+}): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gastos").update(input.patch).eq("id", input.id);
+  if (error) return { error: error.message };
+  revalidatePath("/cashflow");
+  return { ok: true };
+}
+
+// Borra un gasto. Solo admin (RLS).
+export async function deleteGasto(input: { id: string }): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gastos").delete().eq("id", input.id);
+  if (error) return { error: error.message };
+  revalidatePath("/cashflow");
   return { ok: true };
 }

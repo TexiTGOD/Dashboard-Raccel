@@ -50,13 +50,22 @@ export async function loadRpc(sb: SupabaseClient, fn: string, p: Period) {
   return data ?? [];
 }
 
-// mesKey = YYYY-MM-01. Metas y gastos son mensuales (Period.mesInicioStr).
+// mesKey = YYYY-MM-01. Metas son mensuales (Period.mesInicioStr).
 export async function loadMetas(sb: SupabaseClient, mesKey: string) {
   const { data } = await sb.from("metas").select("metrica, objetivo").eq("periodo", mesKey);
   return (data ?? []) as { metrica: string; objetivo: number }[];
 }
 
-export async function loadGastos(sb: SupabaseClient, mesKey: string) {
-  const { data } = await sb.from("gastos").select("categoria, concepto, monto").eq("periodo", mesKey);
-  return (data ?? []) as { categoria: string; concepto: string | null; monto: number }[];
+export interface GastoRow {
+  id: string;
+  fecha: string;
+  categoria: string;
+  concepto: string | null;
+  monto: number;
+}
+
+// Gastos con fecha propia: detalle fila por fila dentro del rango del período.
+export async function loadGastos(sb: SupabaseClient, p: Period): Promise<GastoRow[]> {
+  const { data } = await sb.rpc("dashboard_gastos", { p_start: p.startStr, p_end: p.endStr });
+  return (data ?? []) as GastoRow[];
 }
