@@ -3,9 +3,8 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
 import { loadRpc } from "@/lib/dashboard";
-import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "../operaciones/_components/page-header";
-import { AttributionTable } from "../operaciones/_components/attribution-table";
+import { AttributionCards } from "../operaciones/_components/attribution-cards";
 
 export default async function AtribucionPage({
   searchParams,
@@ -21,14 +20,10 @@ export default async function AtribucionPage({
   return (
     <div className="tabular-nums">
       <PageHeader title="Atribución por pieza" period={period} />
-      <Card>
-        <CardContent className="py-4">
-          <AttributionTable rows={rows as never} />
-        </CardContent>
-      </Card>
-      <p className="mt-3 max-w-2xl font-mono text-xs text-[var(--text-muted)]">
-        La columna que decide qué contenido hacer mañana es Cash/lead: no cuál trae más gente, cuál
-        trae la que paga. Ordenada por volumen miente; por cash/lead, dice la verdad.
+      <AttributionCards rows={rows as never} />
+      <p className="mt-4 max-w-2xl font-mono text-xs text-[var(--text-muted)]">
+        La métrica que decide qué contenido hacer mañana es Cash/lead: no cuál trae más gente, cuál
+        trae la que paga. Ordenar por volumen miente; por cash/lead, dice la verdad.
       </p>
     </div>
   );

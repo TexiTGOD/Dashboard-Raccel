@@ -65,6 +65,11 @@ export function MetasCascade({
   const [cash, setCash] = useState(actuales.cash_collected != null ? String(actuales.cash_collected) : "");
   const [dias, setDias] = useState<number>(90);
   const [hist, setHist] = useState<TasasHistoricas>(historico);
+  // Precio del programa (neto/venta): supuesto editable, prellenado del histórico.
+  // Facturación meta = ventas × precio (no es un eslabón de la cascada de leads).
+  const [precio, setPrecio] = useState(
+    actuales.precio != null ? String(actuales.precio) : historico.precio_prom != null ? String(historico.precio_prom) : "",
+  );
   const [links, setLinks] = useState<Record<LinkKey, LinkState>>(() => {
     const init = (l: LinkMeta): LinkState => {
       const saved = l.saveRate ? actuales[l.saveRate] : undefined;
@@ -84,6 +89,7 @@ export function MetasCascade({
     startHist(async () => {
       const t = await getTasasHistoricas(nd);
       setHist(t);
+      if (t.precio_prom != null) setPrecio(String(t.precio_prom));
       setLinks((s) => {
         const next = { ...s };
         for (const L of LINKS) {
@@ -118,6 +124,11 @@ export function MetasCascade({
     return { rows, leads: upstream, impossible };
   }, [cash, links]);
 
+  // Ventas de la meta (count del eslabón AOV) → facturación = ventas × precio.
+  const ventasMeta = casc.rows.find((r) => r.L.key === "aov")?.count ?? NaN;
+  const precioNum = Number(precio);
+  const facturacionMeta = isFinite(ventasMeta) && precioNum > 0 ? ventasMeta * precioNum : NaN;
+
   function togglePin(L: LinkMeta, derivedCount: number) {
     setLinks((s) => {
       const cur = s[L.key];
@@ -144,6 +155,9 @@ export function MetasCascade({
       if (L.saveRate && isFinite(rate)) values[L.saveRate] = Number(rate.toFixed(4));
       if (L.saveCount && isFinite(count)) values[L.saveCount] = Math.round(count);
     });
+    // Precio del programa + facturación derivada (ventas × precio).
+    if (precioNum > 0) values.precio = precioNum;
+    if (isFinite(facturacionMeta)) values.facturacion = Math.round(facturacionMeta);
     start(async () => {
       const res = await guardarMetas({ periodo, values });
       if ("error" in res) toast.error("No se pudo guardar: " + res.error);
@@ -179,6 +193,15 @@ export function MetasCascade({
           ))}
         </div>
         {pendingHist && <span className="font-mono text-[11px] text-[var(--text-muted)]">recalculando…</span>}
+      </div>
+
+      {/* Precio del programa — supuesto de plata para la facturación (no afecta la cascada de leads) */}
+      <div className="max-w-xs space-y-1.5">
+        <label className="micro-label">Precio del programa (neto / venta)</label>
+        <Input inputMode="decimal" className="font-mono" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="1350" />
+        <div className="font-mono text-[11px] text-[var(--text-muted)]">
+          histórico {dias}d: {hist.precio_prom == null ? "sin datos" : fmtMonto(hist.precio_prom, "USD")}
+        </div>
       </div>
 
       {/* Cascada */}
@@ -241,11 +264,19 @@ export function MetasCascade({
         {casc.impossible ? (
           <p className="font-mono text-sm text-danger">Meta incompleta o imposible. Ajustá lo marcado.</p>
         ) : (
-          <p className="font-mono text-sm text-foreground">
-            Para cobrar {fmtMonto(Number(cash), "USD")} necesitás{" "}
-            <span className="text-primary">{fmtInt(Math.round(leadsNecesarios))} leads</span>. Vas {fmtInt(leadsActual)}.
-            {leadsPorDia != null && <> Quedan {daysLeft} días → {fmtDec(leadsPorDia)} leads/día.</>}
-          </p>
+          <div className="space-y-1 font-mono text-sm text-foreground">
+            <p>
+              Para cobrar {fmtMonto(Number(cash), "USD")} necesitás{" "}
+              <span className="text-primary">{fmtInt(Math.round(leadsNecesarios))} leads</span>. Vas {fmtInt(leadsActual)}.
+              {leadsPorDia != null && <> Quedan {daysLeft} días → {fmtDec(leadsPorDia)} leads/día.</>}
+            </p>
+            {isFinite(facturacionMeta) && (
+              <p className="text-muted-foreground">
+                Facturación meta: <span className="text-foreground">{fmtMonto(facturacionMeta, "USD")}</span>{" "}
+                ({fmtInt(Math.round(ventasMeta))} ventas × {fmtMonto(precioNum, "USD")}).
+              </p>
+            )}
+          </div>
         )}
       </div>
 

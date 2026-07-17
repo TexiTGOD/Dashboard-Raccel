@@ -31,7 +31,7 @@ export async function loadKpis(sb: SupabaseClient, p: Period): Promise<Kpis> {
 }
 
 export interface TasasHistoricas {
-  aov_cash: number | null; close_rate: number | null;
+  aov_cash: number | null; precio_prom: number | null; close_rate: number | null;
   show_rate: number | null; tasa_agenda: number | null;
 }
 
@@ -40,7 +40,7 @@ export async function loadTasasHistoricas(sb: SupabaseClient, dias = 90): Promis
   const { data } = await sb.rpc("dashboard_tasas_historicas", { p_dias: dias });
   const t = data?.[0] ?? {};
   return {
-    aov_cash: num(t.aov_cash), close_rate: num(t.close_rate),
+    aov_cash: num(t.aov_cash), precio_prom: num(t.precio_prom), close_rate: num(t.close_rate),
     show_rate: num(t.show_rate), tasa_agenda: num(t.tasa_agenda),
   };
 }

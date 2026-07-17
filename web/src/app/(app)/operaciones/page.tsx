@@ -4,11 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadMetas } from "@/lib/dashboard";
 import { DEFS } from "@/lib/metric-defs";
-import { fmtInt, fmtMonto, fmtPct } from "@/lib/format";
-import { Card, CardContent } from "@/components/ui/card";
+import { fmtInt, fmtMonto } from "@/lib/format";
 import { PageHeader } from "./_components/page-header";
 import { KpiCard } from "./_components/kpi-card";
-import { MetricLabel } from "./_components/metric-label";
+import { Funnel } from "./_components/funnel";
 
 const usd = (n: number | null) => fmtMonto(n, "USD");
 
@@ -31,18 +30,6 @@ export default async function OperacionesPage({
     return r ? Number(r.objetivo) : null;
   };
 
-  const funnel = [
-    { kind: "step", label: "Leads", def: DEFS.leads, value: K.leads },
-    { kind: "rate", label: "% Calificación", def: DEFS.tasa_calificacion, rate: K.tasa_calificacion },
-    { kind: "step", label: "Calificados", def: DEFS.calificados, value: K.calificados },
-    { kind: "rate", label: "Tasa de agenda", def: DEFS.tasa_agenda, rate: K.tasa_agenda },
-    { kind: "step", label: "Agendas", def: DEFS.agendas, value: K.agendas },
-    { kind: "rate", label: "Show-up rate", def: DEFS.show_rate, rate: K.show_rate },
-    { kind: "step", label: "Atendidas", def: DEFS.atendidas, value: K.atendidas },
-    { kind: "rate", label: "Close rate (atendidas)", def: DEFS.close_rate_atendidas, rate: K.close_rate_atendidas },
-    { kind: "step", label: "Ventas", def: DEFS.ventas, value: K.ventas },
-  ] as const;
-
   return (
     <div className="tabular-nums">
       <PageHeader title="Operaciones" period={period} />
@@ -62,46 +49,7 @@ export default async function OperacionesPage({
 
       <section>
         <h2 className="section-title mb-3 border-b border-border pb-2">Embudo</h2>
-        <Card>
-          <CardContent className="space-y-1 py-5">
-            {funnel.map((f, i) =>
-              f.kind === "step" ? (
-                <div key={i} className="flex items-center justify-between py-1.5">
-                  <MetricLabel label={f.label} def={f.def} />
-                  <span className="font-mono text-xl text-foreground">{fmtInt(f.value)}</span>
-                </div>
-              ) : (
-                (() => {
-                  const incompleto = f.label === "Show-up rate" && K.pendientes > 0;
-                  const esCalif = f.label === "% Calificación";
-                  return (
-                    <div key={i} className="flex items-center justify-between border-l-2 border-border py-1 pl-4">
-                      <MetricLabel label={f.label} def={f.def} />
-                      <span className="font-mono text-sm">
-                        <span className={incompleto ? "text-[var(--text-muted)]" : "text-muted-foreground"}>
-                          {fmtPct(f.rate)}
-                          {incompleto ? "*" : ""}
-                        </span>
-                        {incompleto && <span className="ml-2 text-warning">· {K.pendientes} sin desenlace</span>}
-                        {esCalif && K.sin_responder > 0 && (
-                          <span className="ml-2 text-[var(--text-muted)]">· {K.sin_responder} sin responder</span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })()
-              ),
-            )}
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
-              <span>Close (agendadas): {fmtPct(K.close_rate_agendadas)}</span>
-              <span>AOV: {usd(K.aov)}</span>
-              {K.canceladas > 0 && <span>Canceladas: {fmtInt(K.canceladas)}</span>}
-              {K.pendientes > 0 && (
-                <span className="text-warning">* show-up incompleto — {K.pendientes} llamada(s) pasadas sin desenlace cargado</span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <Funnel K={K} />
       </section>
     </div>
   );

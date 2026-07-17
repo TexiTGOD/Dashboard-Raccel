@@ -27,7 +27,7 @@ export default async function HoyPage({
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  const [K, metas, pendRes, ventasRes, moraRes] = await Promise.all([
+  const [K, metas, pendRes, moraRes] = await Promise.all([
     loadKpis(supabase, period),
     loadMetas(supabase, period.mesInicioStr),
     supabase
@@ -36,12 +36,10 @@ export default async function HoyPage({
       .eq("estado", "programada")
       .lt("fecha_llamada", nowIso)
       .order("fecha_llamada", { ascending: true }),
-    supabase.from("sales").select("id").eq("matcheada", false),
     supabase.rpc("dashboard_mora"),
   ]);
 
   const pendientes = ((pendRes.data ?? []) as unknown as PendRow[]).filter((b) => !b.lead?.crisis);
-  const ventasSinMatchear = (ventasRes.data ?? []).length;
   const mora = (moraRes.data ?? []) as {
     cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
     fecha_vencimiento: string; dias_vencida: number; comprador: string | null; booking_id: string | null;
@@ -154,26 +152,6 @@ export default async function HoyPage({
               </Link>
             ))}
           </div>
-        )}
-      </section>
-
-      <section className="mb-6">
-        <h2 className="section-title mb-3 border-b border-border pb-2">
-          Ventas sin matchear ({ventasSinMatchear})
-        </h2>
-        {ventasSinMatchear === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay ventas sin conciliar.</p>
-        ) : (
-          <Link href="/closer/ventas-sin-matchear" className="block">
-            <Card className="transition-colors hover:border-primary/40 hover:bg-[var(--neon-wash)]">
-              <CardContent className="flex items-center justify-between py-4">
-                <span className="font-mono text-sm text-foreground">
-                  {ventasSinMatchear} venta(s) esperando conciliación
-                </span>
-                <span className="font-mono text-xs text-primary">conciliar →</span>
-              </CardContent>
-            </Card>
-          </Link>
         )}
       </section>
 

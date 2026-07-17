@@ -16,11 +16,9 @@ const byRol: Record<Rol, { href: string; label: string }[]> = {
     { href: "/cashflow", label: "Cashflow" },
     { href: "/operaciones/registros", label: "Registros" },
     { href: "/closer", label: "Llamadas" },
-    { href: "/closer/ventas-sin-matchear", label: "Ventas s/ matchear" },
   ],
   closer: [
     { href: "/closer", label: "Llamadas" },
-    { href: "/closer/ventas-sin-matchear", label: "Ventas s/ matchear" },
   ],
   setter: [{ href: "/setter", label: "Pipeline" }],
 };

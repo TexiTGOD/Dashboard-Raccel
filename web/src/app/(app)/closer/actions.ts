@@ -188,27 +188,3 @@ export async function addPayment(input: {
   revalidatePath(`/closer/${input.bookingId}`);
   return { ok: true };
 }
-
-// Concilia una venta sin matchear: la vincula a un booking propio (y hereda su lead).
-export async function linkSale(input: {
-  saleId: string;
-  bookingId: string;
-}): Promise<Result> {
-  const supabase = await createClient();
-
-  const { data: b } = await supabase
-    .from("bookings")
-    .select("lead_id")
-    .eq("id", input.bookingId)
-    .single();
-
-  const { error } = await supabase
-    .from("sales")
-    .update({ booking_id: input.bookingId, lead_id: b?.lead_id ?? null, matcheada: true })
-    .eq("id", input.saleId);
-  if (error) return { error: error.message };
-
-  revalidatePath("/closer/ventas-sin-matchear");
-  revalidatePath("/closer");
-  return { ok: true };
-}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -7,43 +6,22 @@ import { loadRpc } from "@/lib/dashboard";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "../operaciones/_components/page-header";
+import { CobranzaRow } from "./cobranza-row";
 
 const usd = (n: number | null) => fmtMonto(n, "USD");
 
 interface CuotaPeriodo {
-  cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
+  cuota_id: string; sale_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
   fecha_vencimiento: string; cobrada: boolean; comprador: string | null; producto: string | null; booking_id: string | null;
 }
 interface MoraRow {
-  cuota_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
+  cuota_id: string; sale_id: string; numero_cuota: number; cuotas_total: number | null; monto_esperado: number;
   fecha_vencimiento: string; dias_vencida: number; comprador: string | null; producto: string | null; booking_id: string | null;
 }
 
 // "pago único" cuando la venta es de 1 cuota; si no, "cuota N/total".
 const etiquetaCuota = (n: number, total: number | null) =>
   total != null && total <= 1 ? "pago único" : `cuota ${n}${total ? `/${total}` : ""}`;
-
-function Fila({
-  href, izq, sub, monto, extra,
-}: {
-  href: string | null; izq: string; sub: string; monto: number; extra?: React.ReactNode;
-}) {
-  const inner = (
-    <Card className={href ? "gap-0 py-0 transition-colors hover:border-primary/40 hover:bg-[var(--neon-wash)]" : "gap-0 py-0"}>
-      <CardContent className="flex items-center justify-between gap-3 px-5 py-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm text-foreground">{izq}</div>
-          <div className="truncate font-mono text-xs text-muted-foreground">{sub}</div>
-        </div>
-        <div className="flex shrink-0 items-center gap-3 font-mono text-sm">
-          {extra}
-          <span className="text-foreground">{usd(monto)}</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-  return href ? <Link href={href} className="block">{inner}</Link> : inner;
-}
 
 export default async function CobranzasPage({
   searchParams,
@@ -95,13 +73,16 @@ export default async function CobranzasPage({
         ) : (
           <div className="space-y-2">
             {mora.map((c) => (
-              <Fila
+              <CobranzaRow
                 key={c.cuota_id}
-                href={c.booking_id ? `/closer/${c.booking_id}` : null}
+                bookingId={c.booking_id}
+                saleId={c.sale_id}
+                cuotaId={c.cuota_id}
+                numeroCuota={c.numero_cuota}
+                monto={Number(c.monto_esperado)}
                 izq={`${c.comprador ?? "—"} · ${etiquetaCuota(c.numero_cuota, c.cuotas_total)}`}
                 sub={`${c.producto ?? ""} · venció ${fmtFecha(c.fecha_vencimiento)}`}
-                monto={Number(c.monto_esperado)}
-                extra={<span className="text-danger">{c.dias_vencida}d</span>}
+                dias={c.dias_vencida}
               />
             ))}
           </div>
@@ -117,12 +98,15 @@ export default async function CobranzasPage({
         ) : (
           <div className="space-y-2">
             {pendientesPeriodo.map((c) => (
-              <Fila
+              <CobranzaRow
                 key={c.cuota_id}
-                href={c.booking_id ? `/closer/${c.booking_id}` : null}
+                bookingId={c.booking_id}
+                saleId={c.sale_id}
+                cuotaId={c.cuota_id}
+                numeroCuota={c.numero_cuota}
+                monto={Number(c.monto_esperado)}
                 izq={`${c.comprador ?? "—"} · ${etiquetaCuota(c.numero_cuota, c.cuotas_total)}`}
                 sub={`${c.producto ?? ""} · vence ${fmtFecha(c.fecha_vencimiento)}`}
-                monto={Number(c.monto_esperado)}
               />
             ))}
           </div>
