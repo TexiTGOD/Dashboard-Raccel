@@ -162,10 +162,31 @@ function EditableCell({
   );
 }
 
-function DataTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: Col[] }) {
+const PAGE_SIZE = 50;
+
+// Key estable por fila (id de la entidad) — necesario con paginación: si usáramos
+// el índice, el estado de edición de una celda "saltaría" de fila al cambiar de página.
+function rowKey(r: Record<string, unknown>, i: number): string {
+  return String(r.payment_id ?? r.lead_id ?? r.sale_id ?? r.booking_id ?? i);
+}
+
+function DataTable({
+  rows,
+  cols,
+  totalCount,
+  totalLabel,
+  sums,
+}: {
+  rows: Record<string, unknown>[];
+  cols: Col[];
+  totalCount: number; // total real (count agregado en la base, sin el cap de 1000)
+  totalLabel: string; // "leads" | "llamadas" | "ventas" | "pagos"
+  sums?: Record<string, number>; // sumas agregadas por columna (facturación, cash…)
+}) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [dir, setDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(0);
 
   const sorted = useMemo(() => {
     if (!sortKey) return rows;
@@ -180,83 +201,125 @@ function DataTable({ rows, cols }: { rows: Record<string, unknown>[]; cols: Col[
     });
   }, [rows, cols, sortKey, dir]);
 
-  const totals = cols.map((c) =>
-    c.total ? rows.reduce((s, r) => s + (Number(r[c.key]) || 0), 0) : null,
-  );
+  // Total de columna: la suma agregada de la base (correcta a cualquier volumen);
+  // si no vino, cae a la suma del array traído.
+  const colTotal = (c: Col): number | null => {
+    if (!c.total) return null;
+    if (sums && c.key in sums) return sums[c.key];
+    return rows.reduce((s, r) => s + (Number(r[c.key]) || 0), 0);
+  };
 
   function toggle(key: string) {
     if (key === sortKey) setDir(dir === "asc" ? "desc" : "asc");
     else { setSortKey(key); setDir("desc"); }
+    setPage(0);
   }
 
   if (rows.length === 0) {
     return <p className="py-4 text-sm text-muted-foreground">Sin registros en el período.</p>;
   }
 
-  const hasTotals = totals.some((t) => t != null);
   const alignOf = (t: ColType) => (t === "text" || t === "dolor" || t === "date" ? "text-left" : "text-right");
+  // Paginación client-side: renderiza solo la página actual (no manda 1.000+ filas
+  // al DOM). El orden y las sumas siguen sobre todas las filas traídas.
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount - 1);
+  const from = clampedPage * PAGE_SIZE;
+  const visible = sorted.slice(from, from + PAGE_SIZE);
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {cols.map((c) => (
-              <TableHead
-                key={c.key}
-                onClick={() => toggle(c.key)}
-                className={`cursor-pointer select-none whitespace-nowrap ${alignOf(c.type)}`}
-              >
-                <span className="micro-label">{c.label}</span>
-                {sortKey === c.key && <span className="ml-1 text-primary">{dir === "asc" ? "↑" : "↓"}</span>}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((r, i) => {
-            const bookingId = r["booking_id"] as string | null;
-            return (
-              <TableRow
-                key={i}
-                onClick={() => bookingId && router.push(`/closer/${bookingId}`)}
-                className={bookingId ? "cursor-pointer" : ""}
-              >
-                {cols.map((c) => {
-                  const editId = c.edit ? (r[c.edit.idKey] as string | null) : null;
-                  const isEdit = Boolean(c.edit && editId);
-                  return (
-                    <TableCell
-                      key={c.key}
-                      // En celdas editables, frenar el click acá evita que la fila
-                      // navegue (cubre también el padding alrededor del control).
-                      onClick={isEdit ? (e) => e.stopPropagation() : undefined}
-                      className={`whitespace-nowrap font-mono ${alignOf(c.type)} ${c.total || c.key === "monto" ? "text-foreground" : "text-muted-foreground"} ${isEdit ? "p-0" : ""}`}
-                    >
-                      {isEdit && c.edit && editId ? (
-                        <EditableCell value={r[c.key]} spec={c.edit} id={editId} colType={c.type} />
-                      ) : (
-                        fmtCell(r[c.key], c.type)
-                      )}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-        {hasTotals && (
-          <TableFooter>
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
             <TableRow>
-              {cols.map((c, idx) => (
-                <TableCell key={c.key} className={`whitespace-nowrap font-mono ${alignOf(c.type)} text-foreground`}>
-                  {idx === 0 ? `Total · ${rows.length}` : totals[idx] != null ? fmtCell(totals[idx], c.type) : ""}
-                </TableCell>
+              {cols.map((c) => (
+                <TableHead
+                  key={c.key}
+                  onClick={() => toggle(c.key)}
+                  className={`cursor-pointer select-none whitespace-nowrap ${alignOf(c.type)}`}
+                >
+                  <span className="micro-label">{c.label}</span>
+                  {sortKey === c.key && <span className="ml-1 text-primary">{dir === "asc" ? "↑" : "↓"}</span>}
+                </TableHead>
               ))}
             </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((r, i) => {
+              const bookingId = r["booking_id"] as string | null;
+              return (
+                <TableRow
+                  key={rowKey(r, from + i)}
+                  onClick={() => bookingId && router.push(`/closer/${bookingId}`)}
+                  className={bookingId ? "cursor-pointer" : ""}
+                >
+                  {cols.map((c) => {
+                    const editId = c.edit ? (r[c.edit.idKey] as string | null) : null;
+                    const isEdit = Boolean(c.edit && editId);
+                    return (
+                      <TableCell
+                        key={c.key}
+                        // En celdas editables, frenar el click acá evita que la fila
+                        // navegue (cubre también el padding alrededor del control).
+                        onClick={isEdit ? (e) => e.stopPropagation() : undefined}
+                        className={`whitespace-nowrap font-mono ${alignOf(c.type)} ${c.total || c.key === "monto" ? "text-foreground" : "text-muted-foreground"} ${isEdit ? "p-0" : ""}`}
+                      >
+                        {isEdit && c.edit && editId ? (
+                          <EditableCell value={r[c.key]} spec={c.edit} id={editId} colType={c.type} />
+                        ) : (
+                          fmtCell(r[c.key], c.type)
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          {/* Fila de totales: siempre visible. El conteo y las sumas vienen de la
+              base (agregado, sin cap). Si difiere de "Mostrando … de N", hubo truncamiento. */}
+          <TableFooter>
+            <TableRow>
+              {cols.map((c, idx) => {
+                const ct = colTotal(c);
+                return (
+                  <TableCell key={c.key} className={`whitespace-nowrap font-mono ${alignOf(c.type)} text-foreground`}>
+                    {idx === 0 ? `Total: ${fmtInt(totalCount)} ${totalLabel}` : ct != null ? fmtCell(ct, c.type) : ""}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
           </TableFooter>
-        )}
-      </Table>
+        </Table>
+      </div>
+
+      {pageCount > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-xs text-muted-foreground">
+          <span>
+            Mostrando {fmtInt(from + 1)}–{fmtInt(Math.min(from + PAGE_SIZE, sorted.length))} de {fmtInt(sorted.length)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(clampedPage - 1)}
+              disabled={clampedPage === 0}
+              className="rounded border border-border px-2 py-1 hover:bg-[var(--surface-elevated)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              ‹ Anterior
+            </button>
+            <span>Página {clampedPage + 1} / {pageCount}</span>
+            <button
+              type="button"
+              onClick={() => setPage(clampedPage + 1)}
+              disabled={clampedPage >= pageCount - 1}
+              className="rounded border border-border px-2 py-1 hover:bg-[var(--surface-elevated)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Siguiente ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -303,16 +366,28 @@ const COLS = {
   ] as Col[],
 };
 
+interface Counts {
+  pagos: number;
+  ventas: number;
+  llamadas: number;
+  leads: number;
+  ventas_facturacion: number;
+  ventas_cash: number;
+  pagos_cash: number;
+}
+
 export function RegistrosTables({
   pagos,
   ventas,
   llamadas,
   leads,
+  counts,
 }: {
   pagos: Record<string, unknown>[];
   ventas: Record<string, unknown>[];
   llamadas: Record<string, unknown>[];
   leads: Record<string, unknown>[];
+  counts: Counts;
 }) {
   return (
     <div className="space-y-3">
@@ -327,10 +402,20 @@ export function RegistrosTables({
           <TabsTrigger value="llamadas">Llamadas</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
         </TabsList>
-        <TabsContent value="pagos"><DataTable rows={pagos} cols={COLS.pagos} /></TabsContent>
-        <TabsContent value="ventas"><DataTable rows={ventas} cols={COLS.ventas} /></TabsContent>
-        <TabsContent value="llamadas"><DataTable rows={llamadas} cols={COLS.llamadas} /></TabsContent>
-        <TabsContent value="leads"><DataTable rows={leads} cols={COLS.leads} /></TabsContent>
+        <TabsContent value="pagos">
+          <DataTable rows={pagos} cols={COLS.pagos} totalCount={counts.pagos} totalLabel="pagos"
+            sums={{ monto: counts.pagos_cash }} />
+        </TabsContent>
+        <TabsContent value="ventas">
+          <DataTable rows={ventas} cols={COLS.ventas} totalCount={counts.ventas} totalLabel="ventas"
+            sums={{ valor_contrato: counts.ventas_facturacion, cash_collected: counts.ventas_cash }} />
+        </TabsContent>
+        <TabsContent value="llamadas">
+          <DataTable rows={llamadas} cols={COLS.llamadas} totalCount={counts.llamadas} totalLabel="llamadas" />
+        </TabsContent>
+        <TabsContent value="leads">
+          <DataTable rows={leads} cols={COLS.leads} totalCount={counts.leads} totalLabel="leads" />
+        </TabsContent>
       </Tabs>
     </div>
   );
