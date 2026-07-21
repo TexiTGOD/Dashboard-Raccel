@@ -52,6 +52,25 @@ export async function saveCallOutcome(input: {
   return { ok: true };
 }
 
+// Pipeline de llamadas: mover una llamada de columna = cambiar su estado. Es la
+// acción visual de la tarjeta (select), no hay drag & drop. La RLS decide quién
+// puede: admin cualquiera, closer solo las suyas.
+export async function cambiarEstadoLlamada(input: {
+  bookingId: string;
+  estado: EstadoBooking;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("bookings")
+    .update({ estado: input.estado })
+    .eq("id", input.bookingId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/closer");
+  revalidatePath(`/closer/${input.bookingId}`);
+  return { ok: true };
+}
+
 // Carga manual de una venta (el TRATO) + su primer pago.
 // sale = valor del contrato (facturación); payment = la plata que entró.
 export async function createManualSale(input: {
