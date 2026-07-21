@@ -50,6 +50,33 @@ export async function loadRpc(sb: SupabaseClient, fn: string, p: Period) {
   return data ?? [];
 }
 
+// Trae TODAS las filas de un RPC que devuelve SETOF, paginando con .range()
+// (→ ?offset&limit) para superar el cap de 1000 filas POR REQUEST de PostgREST.
+// Requisito: el RPC debe tener un ORDER BY TOTAL (fecha + id), si no el paginado
+// por offset duplica/saltea filas en los bordes de chunk.
+// `expected` (el conteo agregado) acota el loop; 0 = desconocido (corta al vaciarse).
+export async function fetchAllRpcRows(
+  sb: SupabaseClient,
+  fn: string,
+  args: Record<string, string>,
+  expected = 0,
+): Promise<Record<string, unknown>[]> {
+  const CHUNK = 1000;
+  const MAX_ITERS = 500; // red de seguridad ante un range que no avanzara
+  const out: Record<string, unknown>[] = [];
+  let offset = 0;
+  for (let i = 0; i < MAX_ITERS; i++) {
+    const { data, error } = await sb.rpc(fn, args).range(offset, offset + CHUNK - 1);
+    if (error || !data || data.length === 0) break; // no hay más filas
+    out.push(...(data as Record<string, unknown>[]));
+    // Avanzar por lo REALMENTE recibido (no por CHUNK): si el server capara por
+    // debajo de CHUNK, igual paginamos bien. offset siempre crece → el loop corta.
+    offset += data.length;
+    if (expected > 0 && out.length >= expected) break; // llegamos al total conocido
+  }
+  return out;
+}
+
 // mesKey = YYYY-MM-01. Metas son mensuales (Period.mesInicioStr).
 export async function loadMetas(sb: SupabaseClient, mesKey: string) {
   const { data } = await sb.from("metas").select("metrica, objetivo").eq("periodo", mesKey);

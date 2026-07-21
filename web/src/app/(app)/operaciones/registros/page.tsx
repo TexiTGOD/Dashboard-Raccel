@@ -2,39 +2,12 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
+import { fetchAllRpcRows } from "@/lib/dashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { RangePicker } from "../_components/period-selector";
 import { RegistrosTables } from "./registros-tables";
 
-type DbClient = Awaited<ReturnType<typeof createClient>>;
 type RpcArgs = { p_start: string; p_end: string };
-
-// Trae TODAS las filas de un RPC que devuelve SETOF, paginando con .range() para
-// superar el cap de 1000 filas por request de PostgREST. El ORDER BY de las
-// dashboard_rows_* es TOTAL (fecha + id, migración 0016), así que el paginado por
-// range no duplica ni saltea filas en los bordes de chunk. `expected` (el conteo
-// agregado) acota el loop; si no vino, corta al primer chunk incompleto.
-async function fetchAllRows(
-  supabase: DbClient,
-  fn: string,
-  args: RpcArgs,
-  expected: number,
-): Promise<Record<string, unknown>[]> {
-  const CHUNK = 1000;
-  const MAX_ITERS = 500; // red de seguridad ante un range que no avanzara
-  const out: Record<string, unknown>[] = [];
-  let offset = 0;
-  for (let i = 0; i < MAX_ITERS; i++) {
-    const { data, error } = await supabase.rpc(fn, args).range(offset, offset + CHUNK - 1);
-    if (error || !data || data.length === 0) break; // no hay más filas
-    out.push(...(data as Record<string, unknown>[]));
-    // Avanzar por lo REALMENTE recibido (no por CHUNK): si el server capara por
-    // debajo de CHUNK, igual paginamos bien. offset siempre crece → el loop corta.
-    offset += data.length;
-    if (expected > 0 && out.length >= expected) break; // llegamos al total conocido
-  }
-  return out;
-}
 
 export default async function RegistrosPage({
   searchParams,
@@ -57,10 +30,10 @@ export default async function RegistrosPage({
   // Filas: TODAS (paginadas por chunks con .range), no las primeras 1000. Así la
   // paginación client-side recorre el volumen completo y no queda topada en el cap.
   const [pagos, ventas, llamadas, leads] = await Promise.all([
-    fetchAllRows(supabase, "dashboard_rows_pagos", args, n("pagos_count")),
-    fetchAllRows(supabase, "dashboard_rows_ventas", args, n("ventas_count")),
-    fetchAllRows(supabase, "dashboard_rows_llamadas", args, n("llamadas_count")),
-    fetchAllRows(supabase, "dashboard_rows_leads", args, n("leads_count")),
+    fetchAllRpcRows(supabase, "dashboard_rows_pagos", args, n("pagos_count")),
+    fetchAllRpcRows(supabase, "dashboard_rows_ventas", args, n("ventas_count")),
+    fetchAllRpcRows(supabase, "dashboard_rows_llamadas", args, n("llamadas_count")),
+    fetchAllRpcRows(supabase, "dashboard_rows_leads", args, n("leads_count")),
   ]);
 
   return (

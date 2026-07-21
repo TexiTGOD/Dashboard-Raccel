@@ -201,14 +201,17 @@ function tramoFor(recursos) {
 
 // ---------------------------------------------------------------------------
 // Estado de la llamada desde "Show" (+ Estado como señal de asistencia).
-function estadoBooking(show, estado, fechaISO) {
+function estadoBooking(show, estado) {
   const s = (show || "").trim().toLowerCase();
   if (s === "si" || s === "sí") return "atendida";
   if (s === "no") return "no_show";
-  // Show vacío: si hay un Estado cargado, la call ocurrió -> atendida.
+  // Show vacío pero con un Estado cargado: la call ocurrió -> atendida.
   if ((estado || "").trim()) return "atendida";
-  // Sin señal: no_show si la fecha ya pasó, si no programada.
-  return fechaISO && new Date(fechaISO) < new Date() ? "no_show" : "programada";
+  // Sin ninguna señal (Show y Estado vacíos): el tracker NUNCA registró el
+  // desenlace. Queda 'programada' — que es justo lo que el pipeline muestra como
+  // "Pendiente de desenlace" si la fecha ya pasó. Marcarlas no_show sería afirmar
+  // que no asistió, cosa que el tracker no dice.
+  return "programada";
 }
 // Resultado de la call (solo si atendida) desde "Estado".
 function resultadoCall(estado) {
@@ -408,7 +411,7 @@ async function main() {
   // Bookings (uno por call). fecha_llamada NOT NULL -> siempre hay (call|agenda).
   console.log("6) Insertando bookings…");
   const bookingsSeed = callMeta.map((cm) => {
-    const estado = estadoBooking(cm.r[11], cm.r[12], cm.fechaCall);
+    const estado = estadoBooking(cm.r[11], cm.r[12]);
     return {
       calendly_event_id: `imp_call_${cm.i}`,
       ig_username: null, // el tracker de calls no trae IG
