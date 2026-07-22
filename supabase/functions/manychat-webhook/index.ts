@@ -29,7 +29,10 @@ Deno.serve(async (req) => {
     manychat_contact_id: String(contactId),
     ig_username: normalizeHandle(p.ig_username),
     nombre: p.nombre ?? null,
-    fecha_primer_contacto: p.fecha_primer_contacto ?? null,
+    // fecha_primer_contacto NO se manda: la deriva la base desde created_at
+    // (trigger trg_leads_fecha_primer_contacto). ManyChat mandaba el placeholder
+    // crudo {{cuf_...}} → cast a timestamptz fallaba (500, lead perdido), o fecha
+    // sin hora (00:00). Además, al no mandarla, el 2º request (UPDATE) no la pisa.
     pieza_origen: p.pieza_origen ?? null,
     respuesta_lead: p.respuesta_lead ?? p.respuesta_primer_contacto ?? null,
     respuesta_lead_2: p.respuesta_lead_2 ?? null,
