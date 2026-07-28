@@ -75,6 +75,7 @@ export interface Booking {
   closer: string | null;
   fecha_llamada: string | null;
   estado: EstadoBooking | null;
+  grabacion_url: string | null;
   lead_id: string | null;
 }
 
