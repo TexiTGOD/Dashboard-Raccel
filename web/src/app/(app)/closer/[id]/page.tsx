@@ -7,6 +7,7 @@ import { EstadoBadge } from "../_components/badges";
 import { OutcomeForm } from "./outcome-form";
 import { ManualSaleForm } from "./manual-sale-form";
 import { CuotasPanel } from "./cuotas-panel";
+import { GrabacionField } from "./grabacion-field";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
 import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
@@ -137,6 +138,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 <span className="text-muted-foreground">Todavía no hay resumen.</span>
               )}
             </Field>
+            <GrabacionField bookingId={b.id} url={b.grabacion_url ?? null} />
           </Panel>
         </div>
 

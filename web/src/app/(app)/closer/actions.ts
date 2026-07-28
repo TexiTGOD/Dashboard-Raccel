@@ -52,6 +52,27 @@ export async function saveCallOutcome(input: {
   return { ok: true };
 }
 
+// Link manual de la grabación (provisorio, hasta la integración con Fathom). Se
+// guarda en el booking con updated_by = quién lo cargó (updated_at lo pone el
+// trigger). La RLS garantiza que el closer solo toque un booking propio.
+export async function guardarGrabacionUrl(input: {
+  bookingId: string;
+  url: string;
+}): Promise<Result> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const url = input.url.trim() || null;
+  const { error } = await supabase
+    .from("bookings")
+    .update({ grabacion_url: url, updated_by: user?.id ?? null })
+    .eq("id", input.bookingId);
+  if (error) return { error: error.message };
+  revalidatePath(`/closer/${input.bookingId}`);
+  return { ok: true };
+}
+
 // Pipeline de llamadas: mover una llamada de columna = cambiar su estado. Es la
 // acción visual de la tarjeta (select), no hay drag & drop. La RLS decide quién
 // puede: admin cualquiera, closer solo las suyas.
