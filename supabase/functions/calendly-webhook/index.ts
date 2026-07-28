@@ -175,6 +175,10 @@ Deno.serve(async (req) => {
     closer: extractCloser(sched),
     fecha_llamada: (sched?.["start_time"] as string) ?? null,
     estado: event === "invitee.canceled" ? "cancelada" : "programada",
+    // Respuestas completas del formulario, tal como llegan del payload (mismo
+    // criterio que bookings_descartados.payload: el valor crudo a una col jsonb).
+    // La extracción del IG de arriba NO cambia; esto es adicional.
+    calendly_respuestas: p?.["questions_and_answers"] ?? null,
   };
 
   const { data, error } = await sb
