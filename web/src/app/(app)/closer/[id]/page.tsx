@@ -86,10 +86,9 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
   const qa = leerRespuestasCalendly(b.calendly_respuestas);
   // Red de seguridad: si sobró alguna respuesta sin clasificar Y falta algún campo
   // conocido, la mostramos cruda para que el dato no desaparezca de la pantalla
-  // (cubre también la degradación PARCIAL: una sola pregunta reformulada).
-  // El par de Instagram se excluye: ya se muestra en el encabezado de la ficha.
-  const IG_RX = /instagram|(^|\W)ig(\W|$)|handle|arroba/i;
-  const otrasRespuestas = qa.sinClasificar.filter((p) => !IG_RX.test(p.pregunta));
+  // (cubre la degradación PARCIAL: una sola pregunta reformulada). Las preguntas
+  // que no van a la ficha (Instagram, compromiso) ya las descarta el parser.
+  const otrasRespuestas = qa.sinClasificar;
   const sinReconocer =
     otrasRespuestas.length > 0 &&
     [qa.telefono, qa.sentimientos, qa.trabajo, qa.objetivo, qa.recursos, qa.decisor].some((v) => !v);

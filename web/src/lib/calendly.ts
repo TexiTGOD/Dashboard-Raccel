@@ -88,12 +88,27 @@ export function etiquetaObjetivo(a: string): string {
 
 type Campo = keyof Omit<RespuestasProspecto, "sinClasificar">;
 
-// `excluye` = marcas inequívocas de OTRO campo. Si la pregunta las tiene, este
-// campo no puede reclamar el par (evita que una pregunta de decisor redactada
-// como "decisiones de inversión" se la lleve recursos, o que una de sentimientos
-// que menciona "pareja" se la lleve decisor).
+// Preguntas que NO van a la ficha (se descartan antes de matchear, así tampoco
+// aparecen en "Otras respuestas"):
+//  - el compromiso de asistencia: texto larguísimo, no aporta contexto de venta.
+//  - el usuario de Instagram: ya se muestra en el encabezado de la ficha (y es lo
+//    que el webhook usa para matchear el lead).
+const IGNORAR: RegExp[] = [
+  /vamos a reservar \d+ minutos|reservar \d+ minutos de nuestro tiempo/,
+  /instagram|usuario de ig|(^|\W)ig(\W|$)|arroba|handle/,
+];
+
+// Tres niveles de señal, de más a menos confiable:
+//   frase     = el texto REAL de la pregunta del formulario (marcador inequívoco)
+//   respuesta = la forma de la respuesta (las de opción múltiple son distintivas)
+//   pregunta  = palabra clave genérica (frágil: es la que se cruza entre campos)
+// `excluye` SOLO frena el nivel `pregunta`. No puede frenar `frase` ni `respuesta`:
+// si la respuesta tiene la forma inequívoca del campo, es de ese campo aunque la
+// pregunta mencione palabras de otro (esto es lo que rompía Decisor, cuya pregunta
+// real dice "heridas emocionales" y quedaba excluida por la palabra "emocion").
 const CAMPOS: {
   key: Campo;
+  frase: RegExp;
   pregunta: RegExp;
   respuesta?: RegExp;
   excluye?: RegExp;
@@ -101,45 +116,52 @@ const CAMPOS: {
 }[] = [
   {
     key: "recursos",
+    frase: /recursos financieros|cuentas con los recursos/,
     pregunta: /recurso|invertir|inversion|economic|presupuesto|dispuesta/,
     respuesta: /^s[ií],?\s*cuento con|^no estaria dispuesta/,
-    excluye: /involucrad|decidir|decision|quien decide/,
+    excluye: /involucrad|pareja\/persona|quien decide/,
     etiqueta: etiquetaRecursos,
   },
   {
     key: "decisor",
-    // Sin /pareja/ suelto: es demasiado goloso (aparece en preguntas de
-    // sentimientos y de objetivo). La forma de la respuesta cubre el resto.
-    pregunta: /involucrad|decidir|toma de decision|decision(es)? de|quien decide|necesitas a (alguien|tu pareja)/,
+    frase: /pareja\/persona|involucrada en la toma de decisiones/,
+    pregunta: /involucrad|decidir|toma de decision|quien decide|necesitas a (alguien|tu pareja)/,
     respuesta: /^no necesito a nadie|^necesito a (mi pareja|alguien)/,
-    excluye: /sentimiento|emocion|recurso|presupuesto/,
     etiqueta: etiquetaDecisor,
   },
   {
     key: "objetivo",
-    pregunta: /60 dias|deseo|lograr|objetivo|meta|resultado/,
+    frase: /te gustaria conseguir|proximos 60 dias/,
+    pregunta: /60 dias|deseo|lograr|objetivo|meta/,
     respuesta: new RegExp(OBJETIVOS.map(([rx]) => rx.source).join("|")),
-    excluye: /sentimiento|emocion/,
+    excluye: /involucrad|pareja\/persona|recursos financieros/,
     etiqueta: etiquetaObjetivo,
   },
-  { key: "sentimientos", pregunta: /sentimiento|emocion|sientes|siente/ },
+  {
+    key: "sentimientos",
+    frase: /sentimientos?\/emocion|3 sentimientos/,
+    pregunta: /sentimiento|emocion|sientes/,
+    excluye: /involucrad|pareja\/persona/,
+  },
   {
     key: "telefono",
+    frase: /telefono de contacto|numero de whatsapp/,
     pregunta: /telefono|whats|celular|numero|movil|contacto/,
-    // Fallback: una respuesta que es casi toda dígitos (mín. 6) es un teléfono.
-    // `excluye` evita que se quede con un handle de Instagram numérico (esa
-    // pregunta ya la usa el webhook para el match y se muestra en el encabezado).
+    // Fallback: una respuesta casi toda dígitos (mín. 6) es un teléfono.
     respuesta: /^[\d\s()+.-]{6,}$/,
-    excluye: /instagram|usuario|handle|arroba|(^|\W)ig(\W|$)/,
   },
   {
     key: "trabajo",
+    frase: /de que trabajas|trabajas actualmente/,
     pregunta: /trabaj|situacion actual|ocupacion|dedic|profesion|empleo/,
-    excluye: /sentimiento|emocion/,
+    excluye: /sentimiento|emocion|involucrad/,
   },
 ];
 
-/** Normaliza el jsonb crudo a pares {pregunta, respuesta} con contenido. */
+/**
+ * Normaliza el jsonb crudo a pares {pregunta, respuesta} con contenido, y
+ * descarta las preguntas que no van a la ficha (ver IGNORAR).
+ */
 function aPares(raw: unknown): QA[] {
   if (!Array.isArray(raw)) return [];
   const out: QA[] = [];
@@ -148,7 +170,10 @@ function aPares(raw: unknown): QA[] {
     const o = it as Record<string, unknown>;
     const pregunta = typeof o.question === "string" ? o.question : "";
     const respuesta = typeof o.answer === "string" ? aplanar(o.answer) : "";
-    if (respuesta) out.push({ pregunta, respuesta });
+    if (!respuesta) continue;
+    const preg = sinAcentos(pregunta);
+    if (preg && IGNORAR.some((rx) => rx.test(preg))) continue;
+    out.push({ pregunta, respuesta });
   }
   return out;
 }
@@ -166,23 +191,21 @@ export function leerRespuestasCalendly(raw: unknown): RespuestasProspecto {
   };
 
   // Se puntúa cada combinación (campo, par) y después se asigna de mayor a menor.
-  // La FORMA de la respuesta vale más que la palabra clave de la pregunta: es
-  // inequívoca y no depende de cómo esté redactada la pregunta. Con "primero
-  // gana" un cruce de palabras clave arruinaba dos campos a la vez.
-  const RESPUESTA = 3;
-  const PREGUNTA = 2;
+  // Con "primero gana" un cruce de palabras clave arruinaba dos campos a la vez.
+  const FRASE = 4; // texto real de la pregunta
+  const RESPUESTA = 3; // forma inequívoca de la respuesta
+  const PREGUNTA = 2; // palabra clave genérica (la única que `excluye` puede frenar)
   const candidatos: { campo: Campo; par: number; orden: number; puntos: number }[] = [];
 
   pares.forEach((par, idx) => {
     const preg = sinAcentos(par.pregunta);
     const resp = sinAcentos(par.respuesta);
     CAMPOS.forEach((c, orden) => {
-      if (c.excluye && preg && c.excluye.test(preg)) return; // la pregunta es de otro campo
-      const puntos = c.respuesta && c.respuesta.test(resp)
-        ? RESPUESTA
-        : preg && c.pregunta.test(preg)
-          ? PREGUNTA
-          : 0;
+      let puntos = 0;
+      if (preg && c.frase.test(preg)) puntos = FRASE;
+      else if (c.respuesta && c.respuesta.test(resp)) puntos = RESPUESTA;
+      // El nivel débil sí puede quedar bloqueado por una marca de otro campo.
+      else if (preg && c.pregunta.test(preg) && !(c.excluye && c.excluye.test(preg))) puntos = PREGUNTA;
       if (puntos) candidatos.push({ campo: c.key, par: idx, orden, puntos });
     });
   });
