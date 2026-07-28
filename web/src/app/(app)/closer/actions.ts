@@ -13,12 +13,21 @@ export async function saveCallOutcome(input: {
   estado: EstadoBooking;
   resultado: ResultadoCall;
   notas: string;
+  /** Criterio del closer. null = sin marcar. Va junto con el desenlace. */
+  calificado: boolean | null;
 }): Promise<Result> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error: bErr } = await supabase
     .from("bookings")
-    .update({ estado: input.estado })
+    .update({
+      estado: input.estado,
+      calificado: input.calificado,
+      updated_by: user?.id ?? null,
+    })
     .eq("id", input.bookingId);
   if (bErr) return { error: bErr.message };
 
