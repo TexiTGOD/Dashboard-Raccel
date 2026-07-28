@@ -76,6 +76,10 @@ export interface Booking {
   fecha_llamada: string | null;
   estado: EstadoBooking | null;
   grabacion_url: string | null;
+  /** Criterio del closer. null = todavía no lo marcó (≠ "no calificada"). */
+  calificado: boolean | null;
+  /** jsonb crudo de Calendly (questions_and_answers). Se lee con leerRespuestasCalendly. */
+  calendly_respuestas: unknown;
   lead_id: string | null;
 }
 

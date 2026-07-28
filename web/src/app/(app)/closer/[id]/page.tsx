@@ -9,7 +9,7 @@ import { ManualSaleForm } from "./manual-sale-form";
 import { CuotasPanel } from "./cuotas-panel";
 import { GrabacionField } from "./grabacion-field";
 import { fmtFecha, fmtMonto } from "@/lib/format";
-import { DOLOR_LABEL, CONCIENCIA_LABEL } from "@/lib/types";
+import { leerRespuestasCalendly, recortar } from "@/lib/calendly";
 import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
 
 type SaleWithPayments = Sale & { payments: Payment[] | null };
@@ -39,6 +39,16 @@ function Field({ label, mono, children }: { label: string; mono?: boolean; child
       </div>
     </div>
   );
+}
+
+// Texto libre del formulario: se recorta para no romper la grilla; el completo
+// queda en el title (hover). Es una FUNCIÓN, no un componente: devuelve null
+// cuando no hay dato, para que el `children || "—"` de Field muestre el guión
+// (un <Componente/> siempre es truthy y se comía el fallback).
+function libre(s: string | null, max = 90): React.ReactNode {
+  if (!s) return null;
+  const corto = recortar(s, max);
+  return <span title={corto === s ? undefined : s}>{corto}</span>;
 }
 
 export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -72,6 +82,18 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
       .order("numero_cuota", { ascending: true });
     cuotas = (cu ?? []) as Cuota[];
   }
+  // Respuestas del formulario de Calendly (jsonb crudo -> campos con etiqueta).
+  const qa = leerRespuestasCalendly(b.calendly_respuestas);
+  // Red de seguridad: si sobró alguna respuesta sin clasificar Y falta algún campo
+  // conocido, la mostramos cruda para que el dato no desaparezca de la pantalla
+  // (cubre también la degradación PARCIAL: una sola pregunta reformulada).
+  // El par de Instagram se excluye: ya se muestra en el encabezado de la ficha.
+  const IG_RX = /instagram|(^|\W)ig(\W|$)|handle|arroba/i;
+  const otrasRespuestas = qa.sinClasificar.filter((p) => !IG_RX.test(p.pregunta));
+  const sinReconocer =
+    otrasRespuestas.length > 0 &&
+    [qa.telefono, qa.sentimientos, qa.trabajo, qa.objetivo, qa.recursos, qa.decisor].some((v) => !v);
+
   // No se puede cargar una venta si la llamada todavía no ocurrió.
   const bookingFutura = b.fecha_llamada ? new Date(b.fecha_llamada).getTime() > Date.now() : false;
 
@@ -100,17 +122,10 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 <div className="grid grid-cols-2 gap-5">
                   <Field label="Pieza de origen" mono>{lead.pieza_origen}</Field>
                   <Field label="Calificación econ.">{lead.econ_calificacion?.replace("_", " ")}</Field>
-                  <Field label="Dolor">{lead.dolor ? DOLOR_LABEL[lead.dolor] : null}</Field>
-                  <Field label="Conciencia" mono>
-                    {lead.conciencia ? CONCIENCIA_LABEL[lead.conciencia] : null}
-                  </Field>
                 </div>
-                {lead.respuesta_lead && (
-                  <div>
-                    <div className="micro-label mb-2">Lo que escribió (DM)</div>
-                    <blockquote className="dm-quote whitespace-pre-wrap">{lead.respuesta_lead}</blockquote>
-                  </div>
-                )}
+                {/* Dolor, Conciencia y "Lo que escribió (DM)" se dejaron de mostrar:
+                    vienen de la automatización de ManyChat que ya no se usa (el DM
+                    llegaba con el placeholder crudo). Siguen en la base, sin borrar. */}
                 {lead.respuesta_lead_2 && (
                   <div>
                     <div className="micro-label mb-2">Profundización</div>
@@ -124,6 +139,34 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 Este booking todavía no matcheó con un lead.
               </p>
             )}
+
+            {/* Lo que respondió el prospecto al agendar. Vive en el booking, así que
+                se muestra aunque no haya lead matcheado. */}
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="micro-label">Respondió al agendar</div>
+              <div className="grid grid-cols-2 gap-5">
+                <Field label="Teléfono / WhatsApp" mono>{libre(qa.telefono, 40)}</Field>
+                <Field label="Recursos" mono>{qa.recursos}</Field>
+                <Field label="Objetivo">{qa.objetivo}</Field>
+                <Field label="Decisor">{qa.decisor}</Field>
+              </div>
+              <Field label="Sentimientos">{libre(qa.sentimientos)}</Field>
+              <Field label="Trabajo">{libre(qa.trabajo)}</Field>
+
+              {/* Red de seguridad: si el formulario cambió tanto que no se reconoció
+                  ninguna pregunta, mostrar los pares crudos en vez de 6 guiones. */}
+              {sinReconocer && (
+                <div className="space-y-2">
+                  <div className="micro-label">Otras respuestas</div>
+                  {otrasRespuestas.map((p, i) => (
+                    <div key={i} className="text-sm">
+                      <span className="text-muted-foreground">{p.pregunta || "—"}: </span>
+                      <span className="text-foreground">{recortar(p.respuesta, 120)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </Panel>
 
           <Panel title="La llamada">
@@ -150,6 +193,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
               estado={b.estado ?? "programada"}
               resultado={call?.resultado ?? "pendiente"}
               notas={call?.notas_closer ?? ""}
+              calificado={b.calificado ?? null}
             />
           </Panel>
 
