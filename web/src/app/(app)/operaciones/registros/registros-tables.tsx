@@ -38,8 +38,10 @@ interface Col {
   label: string;
   type: ColType;
   total?: boolean;
-  /** Peso visual extra (montos): tipografía más grande y color pleno. */
+  /** Peso visual extra (montos): color pleno y semibold. */
   emph?: boolean;
+  /** Ancho de columna en % (solo con densidad "amplia", que usa table-fixed). */
+  ancho?: string;
   /** Render propio de la celda (ej. @IG como link). Pisa el formateo por tipo. */
   render?: (r: Record<string, unknown>) => React.ReactNode;
   edit?: EditSpec;
@@ -239,8 +241,19 @@ function DataTable({
 
   const alignOf = (t: ColType) => (t === "text" || t === "dolor" || t === "date" ? "text-left" : "text-right");
   // Densidad: "amplia" da filas altas y aireadas (Llamadas, estilo de la referencia).
-  const padCelda = densidad === "amplia" ? "px-4 py-4" : "px-3 py-3";
-  const padHead = densidad === "amplia" ? "px-4 py-3" : "px-3 py-2";
+  // "amplia" mantiene el aire VERTICAL (py-4) pero aprieta el horizontal: con 8
+  // columnas, el padding lateral es lo que empujaba la tabla fuera del box.
+  const padCelda = densidad === "amplia" ? "px-2 py-4" : "px-3 py-3";
+  const padHead = densidad === "amplia" ? "px-2 py-3" : "px-3 py-2";
+  // Con anchos declarados usamos table-fixed: la tabla se reparte el 100% del box
+  // y el texto que sobra se recorta con ellipsis, en vez de estirar la tabla y
+  // producir scroll horizontal (que tapaba las primeras columnas).
+  const fijo = cols.some((c) => c.ancho);
+  // Con filtros activos (o si faltaran filas por truncamiento): "N de M".
+  const leyendaTotal =
+    filtradas != null && filtradas !== totalCount
+      ? `Total: ${fmtInt(filtradas)} de ${fmtInt(totalCount)} ${totalLabel}`
+      : `Total: ${fmtInt(totalCount)} ${totalLabel}`;
   // Paginación client-side: renderiza solo la página actual (no manda 1.000+ filas
   // al DOM). El orden y las sumas siguen sobre todas las filas traídas.
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -251,14 +264,15 @@ function DataTable({
   return (
     <div className="space-y-3">
       <div className="overflow-x-auto">
-        <Table>
+        <Table className={fijo ? "table-fixed" : undefined}>
           <TableHeader>
             <TableRow>
               {cols.map((c) => (
                 <TableHead
                   key={c.key}
                   onClick={() => toggle(c.key)}
-                  className={`cursor-pointer select-none whitespace-nowrap ${padHead} ${alignOf(c.type)}`}
+                  style={c.ancho ? { width: c.ancho } : undefined}
+                  className={`cursor-pointer select-none truncate ${padHead} ${alignOf(c.type)}`}
                 >
                   <span className="micro-label">{c.label}</span>
                   {sortKey === c.key && <span className="ml-1 text-primary">{dir === "asc" ? "↑" : "↓"}</span>}
@@ -284,12 +298,18 @@ function DataTable({
                         // En celdas editables, frenar el click acá evita que la fila
                         // navegue (cubre también el padding alrededor del control).
                         onClick={isEdit ? (e) => e.stopPropagation() : undefined}
+                        // Con table-fixed el contenido largo se recorta (ellipsis)
+                        // en lugar de ensanchar la tabla. El valor completo queda
+                        // en el title, al pasar el mouse.
+                        title={fijo && !c.render && r[c.key] != null ? String(r[c.key]) : undefined}
                         className={[
-                          "whitespace-nowrap font-mono",
+                          "font-mono",
+                          fijo ? "truncate" : "whitespace-nowrap",
                           alignOf(c.type),
-                          // Los montos pesan: tipografía más grande y color pleno.
+                          // Monto de fila: color pleno + semibold para que se lea,
+                          // pero un escalón por debajo del Total (que es text-lg).
                           c.emph
-                            ? "text-base font-medium text-foreground tabular-nums"
+                            ? "font-semibold text-foreground tabular-nums"
                             : c.total || c.key === "monto"
                               ? "text-foreground"
                               : "text-muted-foreground",
@@ -314,29 +334,32 @@ function DataTable({
               base (agregado, sin cap). Si difiere de "Mostrando … de N", hubo truncamiento. */}
           <TableFooter>
             <TableRow>
-              {cols.map((c, idx) => {
-                const ct = colTotal(c);
-                return (
-                  <TableCell
-                    key={c.key}
-                    className={[
-                      "whitespace-nowrap font-mono text-foreground",
-                      padCelda,
-                      alignOf(c.type),
-                      c.emph ? "text-lg font-semibold tabular-nums" : "",
-                    ].join(" ")}
-                  >
-                    {idx === 0
-                      ? // Con filtros activos: "N de M" (N filtrado / M total del mes en SQL).
-                        filtradas != null && filtradas !== totalCount
-                        ? `Total: ${fmtInt(filtradas)} de ${fmtInt(totalCount)} ${totalLabel}`
-                        : `Total: ${fmtInt(totalCount)} ${totalLabel}`
-                      : ct != null
-                        ? fmtCell(ct, c.type)
-                        : ""}
-                  </TableCell>
-                );
-              })}
+              {/* Sin columnas de plata (Llamadas, Leads) el conteo ocupa la fila
+                  entera: con table-fixed, en una sola columna quedaría recortado. */}
+              {!cols.some((c) => c.total) ? (
+                <TableCell colSpan={cols.length} className={`font-mono text-foreground ${padCelda}`}>
+                  {leyendaTotal}
+                </TableCell>
+              ) : (
+                cols.map((c, idx) => {
+                  const ct = colTotal(c);
+                  return (
+                    <TableCell
+                      key={c.key}
+                      className={[
+                        "font-mono text-foreground",
+                        fijo ? "truncate" : "whitespace-nowrap",
+                        padCelda,
+                        alignOf(c.type),
+                        // El énfasis fuerte vive SOLO acá: el Total es el que grita.
+                        c.emph ? "text-lg font-bold tabular-nums" : "",
+                      ].join(" ")}
+                    >
+                      {idx === 0 ? leyendaTotal : ct != null ? fmtCell(ct, c.type) : ""}
+                    </TableCell>
+                  );
+                })
+              )}
             </TableRow>
           </TableFooter>
         </Table>
@@ -473,15 +496,17 @@ const COLS = {
     { key: "valor_contrato", label: "Facturación", type: "money", total: true, emph: true },
     { key: "cash_collected", label: "Cash", type: "money", total: true, emph: true },
   ] as Col[],
+  // Anchos declarados => table-fixed: las 8 columnas se reparten el ancho del box
+  // y no hay scroll horizontal (el que tapaba Nombre y @IG). Suman 100%.
   llamadas: [
-    { key: "lead_nombre", label: "Nombre", type: "text" },
-    { key: "ig", label: "@IG", type: "text", render: (r) => <IgLink handle={r.ig} /> },
-    { key: "whatsapp", label: "WhatsApp", type: "text" },
-    { key: "pieza", label: "Origen", type: "text" },
-    { key: "closer", label: "Closer", type: "text", edit: { kind: "text", entity: "booking", field: "closer", idKey: "booking_id" } },
-    { key: "fecha", label: "Fecha", type: "date" },
-    { key: "estado", label: "Estado", type: "text", edit: { kind: "select", entity: "booking", field: "estado", idKey: "booking_id", options: estadoOpts } },
-    { key: "resultado", label: "Resultado", type: "text", edit: { kind: "select", entity: "call", field: "resultado", idKey: "booking_id", options: resultadoOpts } },
+    { key: "lead_nombre", label: "Nombre", type: "text", ancho: "17%" },
+    { key: "ig", label: "@IG", type: "text", ancho: "15%", render: (r) => <IgLink handle={r.ig} /> },
+    { key: "whatsapp", label: "WhatsApp", type: "text", ancho: "14%" },
+    { key: "pieza", label: "Origen", type: "text", ancho: "10%" },
+    { key: "closer", label: "Closer", type: "text", ancho: "14%", edit: { kind: "text", entity: "booking", field: "closer", idKey: "booking_id" } },
+    { key: "fecha", label: "Fecha", type: "date", ancho: "11%" },
+    { key: "estado", label: "Estado", type: "text", ancho: "10%", edit: { kind: "select", entity: "booking", field: "estado", idKey: "booking_id", options: estadoOpts } },
+    { key: "resultado", label: "Resultado", type: "text", ancho: "9%", edit: { kind: "select", entity: "call", field: "resultado", idKey: "booking_id", options: resultadoOpts } },
   ] as Col[],
   leads: [
     { key: "fecha", label: "Fecha", type: "date" },
