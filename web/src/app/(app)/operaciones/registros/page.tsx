@@ -3,11 +3,36 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
 import { fetchAllRpcRows } from "@/lib/dashboard";
-import { Card, CardContent } from "@/components/ui/card";
+import { leerRespuestasCalendly } from "@/lib/calendly";
 import { RangePicker } from "../_components/period-selector";
 import { RegistrosTables } from "./registros-tables";
 
 type RpcArgs = { p_start: string; p_end: string };
+type DbClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * WhatsApp de cada llamada. Vive en bookings.calendly_respuestas (el jsonb que
+ * persiste el webhook) y el RPC de llamadas no lo devuelve, así que se trae aparte
+ * y se mergea por booking_id — sin tocar el schema ni la función.
+ *
+ * Se consulta SOLO por los ids que ya devolvió el RPC, que vienen filtrados por
+ * período y por la regla de leads en crisis: así ningún booking de un lead en
+ * crisis se trae siquiera. En chunks por si algún período trae muchas llamadas.
+ */
+async function whatsappPorBooking(sb: DbClient, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data } = await sb
+      .from("bookings")
+      .select("id, calendly_respuestas")
+      .in("id", ids.slice(i, i + 500));
+    for (const b of data ?? []) {
+      const tel = leerRespuestasCalendly(b.calendly_respuestas).telefono;
+      if (tel) out.set(String(b.id), tel);
+    }
+  }
+  return out;
+}
 
 export default async function RegistrosPage({
   searchParams,
@@ -36,6 +61,16 @@ export default async function RegistrosPage({
     fetchAllRpcRows(supabase, "dashboard_rows_leads", args, n("leads_count")),
   ]);
 
+  // Merge del WhatsApp en las filas de llamadas (ver whatsappPorBooking).
+  const tels = await whatsappPorBooking(
+    supabase,
+    llamadas.map((r) => String(r.booking_id ?? "")).filter(Boolean),
+  );
+  const llamadasConTel = llamadas.map((r) => ({
+    ...r,
+    whatsapp: tels.get(String(r.booking_id ?? "")) ?? null,
+  }));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -48,25 +83,24 @@ export default async function RegistrosPage({
         <RangePicker period={period} />
       </div>
 
-      <Card>
-        <CardContent className="py-4">
-          <RegistrosTables
-            pagos={pagos as never}
-            ventas={ventas as never}
-            llamadas={llamadas as never}
-            leads={leads as never}
-            counts={{
-              pagos: Number(c.pagos_count ?? 0),
-              ventas: Number(c.ventas_count ?? 0),
-              llamadas: Number(c.llamadas_count ?? 0),
-              leads: Number(c.leads_count ?? 0),
-              ventas_facturacion: Number(c.ventas_facturacion ?? 0),
-              ventas_cash: Number(c.ventas_cash ?? 0),
-              pagos_cash: Number(c.pagos_cash ?? 0),
-            }}
-          />
-        </CardContent>
-      </Card>
+      <RegistrosTables
+        pagos={pagos as never}
+        ventas={ventas as never}
+        llamadas={llamadasConTel as never}
+        leads={leads as never}
+        // Límites del período activo: acotan el filtro de fechas del box de Leads.
+        desde={period.desde}
+        hasta={period.hasta}
+        counts={{
+          pagos: Number(c.pagos_count ?? 0),
+          ventas: Number(c.ventas_count ?? 0),
+          llamadas: Number(c.llamadas_count ?? 0),
+          leads: Number(c.leads_count ?? 0),
+          ventas_facturacion: Number(c.ventas_facturacion ?? 0),
+          ventas_cash: Number(c.ventas_cash ?? 0),
+          pagos_cash: Number(c.pagos_cash ?? 0),
+        }}
+      />
     </div>
   );
 }
