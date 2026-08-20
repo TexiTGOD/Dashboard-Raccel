@@ -22,7 +22,7 @@ import {
 } from "@/lib/types";
 import { updateLead, updateBooking, updateSale, updateCallResultado } from "./actions";
 
-type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor";
+type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor" | "bool";
 type EditKind = "text" | "select" | "date" | "int";
 type Entity = "lead" | "booking" | "sale" | "call";
 
@@ -57,6 +57,7 @@ function fmtCell(v: unknown, type: ColType): string {
     case "pct": return fmtPct(Number(v));
     case "date": return fmtFecha(String(v));
     case "dolor": return DOLOR_LABEL[String(v)] ?? String(v);
+    case "bool": return v ? "si" : "";
     default: return String(v);
   }
 }
@@ -239,7 +240,8 @@ function DataTable({
     );
   }
 
-  const alignOf = (t: ColType) => (t === "text" || t === "dolor" || t === "date" ? "text-left" : "text-right");
+  const alignOf = (t: ColType) =>
+    t === "bool" ? "text-center" : t === "text" || t === "dolor" || t === "date" ? "text-left" : "text-right";
   // Densidad: "amplia" da filas altas y aireadas (Llamadas, estilo de la referencia).
   // "amplia" mantiene el aire VERTICAL (py-4) pero aprieta el horizontal: con 8
   // columnas, el padding lateral es lo que empujaba la tabla fuera del box.
@@ -395,6 +397,16 @@ function DataTable({
   );
 }
 
+// Tilde read-only de las 3 dimensiones de calificación (sistema nuevo, viene de
+// las etiquetas de ManyChat). No es editable desde el dashboard.
+function Tilde({ on }: { on: unknown }) {
+  return on ? (
+    <span className="text-success" aria-label="calificado" title="Calificado">✓</span>
+  ) : (
+    <span className="text-[var(--text-muted)]" aria-label="sin calificar">—</span>
+  );
+}
+
 // @handle como link al perfil. El handle ya viene normalizado (sin @, lowercase)
 // por el trigger de la base; igual se limpia por las dudas.
 function IgLink({ handle }: { handle: unknown }) {
@@ -517,6 +529,11 @@ const COLS = {
     { key: "conciencia", label: "Concien.", type: "int", edit: { kind: "select", entity: "lead", field: "conciencia", idKey: "lead_id", options: concienciaOpts } },
     { key: "econ_calificacion", label: "Econ.", type: "text" },
     { key: "estado_funnel", label: "Funnel", type: "text" },
+    // Calificación NUEVA (3 dimensiones, desde etiquetas de ManyChat). Solo
+    // lectura: la fuente de verdad es ManyChat, no el dashboard.
+    { key: "calificado_dolor", label: "Cal. dolor", type: "bool", render: (r) => <Tilde on={r.calificado_dolor} /> },
+    { key: "calificado_urgencia", label: "Cal. urg.", type: "bool", render: (r) => <Tilde on={r.calificado_urgencia} /> },
+    { key: "calificado_economica", label: "Cal. econ.", type: "bool", render: (r) => <Tilde on={r.calificado_economica} /> },
   ] as Col[],
 };
 
