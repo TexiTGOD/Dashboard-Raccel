@@ -64,6 +64,12 @@ export interface Lead {
   respuesta_econ: string | null;
   econ_calificacion: EconCalificacion | null;
   estado_funnel: string | null;
+  // Calificación nueva (3 dimensiones). La prende el webhook calificacion-lead
+  // desde las etiquetas de ManyChat; el dashboard solo las lee. OJO: distinto de
+  // econ_calificacion (sistema viejo, text).
+  calificado_dolor: boolean;
+  calificado_urgencia: boolean;
+  calificado_economica: boolean;
 }
 
 export interface Booking {
