@@ -20,7 +20,7 @@ const byRol: Record<Rol, { href: string; label: string }[]> = {
   closer: [
     { href: "/closer", label: "Llamadas" },
   ],
-  setter: [{ href: "/setter", label: "Pipeline" }],
+  setter: [{ href: "/setter", label: "Métricas" }],
 };
 
 function activeHref(pathname: string, hrefs: string[]): string | null {
