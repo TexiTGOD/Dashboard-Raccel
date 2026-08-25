@@ -85,21 +85,31 @@ export default async function SetterPage({
 }: {
   searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
 }) {
-  // El tablero muestra cash y comisión: solo la setter (dueña de estos números) y
-  // el admin. Un closer autenticado que navegue a mano queda fuera.
+  // El tablero muestra cash y comisión: solo la setter y el admin. Un closer
+  // autenticado que navegue a mano queda fuera.
   const profile = await requireProfile();
   if (profile.rol !== "admin" && profile.rol !== "setter") redirect("/");
+
+  // Recorte por rol, FIJO (el switch configurable es otra tanda): la setter ve solo
+  // lo que depende de su trabajo — volumen de leads, % de agenda, calificación y
+  // meta. Todo lo de desenlace y plata (atendidas, ventas, cierre, cash, comisión)
+  // es del admin. No es solo visual: lo que ella no ve tampoco se pide ni se
+  // renderiza, así que no viaja al navegador.
+  const esAdmin = profile.rol === "admin";
 
   const period = periodFromParams(await searchParams);
   const supabase = await createClient();
   const args = { p_start: period.startStr, p_end: period.endStr };
 
-  const [K, countsRes, ventasRes, metas] = await Promise.all([
+  const [K, countsRes, ventas, metas] = await Promise.all([
     loadKpis(supabase, period),
     supabase.rpc("dashboard_rows_counts", args),
-    // Agregados de venta vía RPC security definer: la setter no tiene acceso a
-    // sales, pero cobra comisión sobre el cash, así que necesita estos números.
-    supabase.rpc("dashboard_setter_ventas", args),
+    // Agregados de venta (RPC security definer). SOLO para admin: si el que mira es
+    // la setter el RPC no se llama, así que cash/comisión/ventas ni siquiera se
+    // consultan — no hay dato que se pueda filtrar al cliente.
+    esAdmin
+      ? supabase.rpc("dashboard_setter_ventas", args).then((r) => r.data?.[0] ?? null)
+      : Promise.resolve(null),
     // Las metas son mensuales: solo aplican si el rango es un mes completo.
     period.esMesCompleto ? loadMetas(supabase, period.mesInicioStr) : Promise.resolve([]),
   ]);
@@ -107,8 +117,9 @@ export default async function SetterPage({
   const cnt = (countsRes.data?.[0] ?? {}) as Record<string, number | null>;
   const n = (k: string) => Number(cnt[k] ?? 0);
 
-  const v = (ventasRes.data?.[0] ?? {}) as Record<string, number | null>;
-  const ventas = Number(v.ventas ?? 0);
+  // Vacío para la setter (el RPC no se llamó); poblado solo para admin.
+  const v = (ventas ?? {}) as Record<string, number | null>;
+  const totalVentas = Number(v.ventas ?? 0);
   const ventasAtribuibles = Number(v.ventas_atribuibles ?? 0);
   const cash = Number(v.cash_collected ?? 0);
   const closeRate = v.close_rate_atendidas == null ? null : Number(v.close_rate_atendidas);
@@ -134,11 +145,15 @@ export default async function SetterPage({
 
       <section>
         <h2 className="section-title mb-3 border-b border-border pb-2">Volumen</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 sm:grid-cols-2 ${esAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
           <Volumen label="Leads" value={K.leads} />
           <Volumen label="Agendas" value={K.agendas} />
-          <Volumen label="Atendidas" value={K.atendidas} />
-          <Volumen label="Ventas" value={ventas} />
+          {esAdmin && (
+            <>
+              <Volumen label="Atendidas" value={K.atendidas} />
+              <Volumen label="Ventas" value={totalVentas} />
+            </>
+          )}
         </div>
       </section>
 
@@ -152,20 +167,24 @@ export default async function SetterPage({
             den={K.leads}
             unidad="leads agendaron"
           />
-          <Ratio
-            label="% de asistencia"
-            value={K.show_rate}
-            num={K.atendidas}
-            den={K.resueltas}
-            unidad="llamadas resueltas"
-          />
-          <Ratio
-            label="% de cierre"
-            value={closeRate}
-            num={ventasAtribuibles}
-            den={K.atendidas}
-            unidad="atendidas"
-          />
+          {esAdmin && (
+            <>
+              <Ratio
+                label="% de asistencia"
+                value={K.show_rate}
+                num={K.atendidas}
+                den={K.resueltas}
+                unidad="llamadas resueltas"
+              />
+              <Ratio
+                label="% de cierre"
+                value={closeRate}
+                num={ventasAtribuibles}
+                den={K.atendidas}
+                unidad="atendidas"
+              />
+            </>
+          )}
         </div>
       </section>
 
@@ -183,23 +202,27 @@ export default async function SetterPage({
         </p>
       </section>
 
-      <section>
-        <h2 className="section-title mb-3 border-b border-border pb-2">Resultado económico</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-            <div className="micro-label">Cash collected del período</div>
-            <div className="mt-2 font-mono text-3xl leading-none text-foreground">{usd(cash)}</div>
-            <div className="mt-2 font-mono text-xs text-muted-foreground">Plata que entró en el rango.</div>
-          </div>
-          <div className="rounded-lg border border-primary/40 bg-card p-5 tabular-nums">
-            <div className="micro-label">Tu comisión</div>
-            <div className="mt-2 font-mono text-4xl leading-none text-foreground">{usd(comision)}</div>
-            <div className="mt-2 font-mono text-xs text-muted-foreground">
-              {fmtPct(pctComision)} de {usd(cash)}
+      {/* Resultado económico: solo admin. Para la setter no se renderiza NI se
+          consulta (ver el RPC condicional arriba). */}
+      {esAdmin && (
+        <section>
+          <h2 className="section-title mb-3 border-b border-border pb-2">Resultado económico</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
+              <div className="micro-label">Cash collected del período</div>
+              <div className="mt-2 font-mono text-3xl leading-none text-foreground">{usd(cash)}</div>
+              <div className="mt-2 font-mono text-xs text-muted-foreground">Plata que entró en el rango.</div>
+            </div>
+            <div className="rounded-lg border border-primary/40 bg-card p-5 tabular-nums">
+              <div className="micro-label">Tu comisión</div>
+              <div className="mt-2 font-mono text-4xl leading-none text-foreground">{usd(comision)}</div>
+              <div className="mt-2 font-mono text-xs text-muted-foreground">
+                {fmtPct(pctComision)} de {usd(cash)}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Meta: solo con un mes calendario completo, igual que Operaciones. */}
       {period.esMesCompleto && (
