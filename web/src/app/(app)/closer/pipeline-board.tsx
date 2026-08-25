@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { fmtFecha, fmtInt } from "@/lib/format";
 import { ESTADOS_BOOKING, type EstadoBooking, type ResultadoCall } from "@/lib/types";
+import { piezaLabel } from "@/lib/pieza";
 import { ResultadoBadge } from "./_components/badges";
 import { cambiarEstadoLlamada } from "./actions";
 
@@ -81,7 +82,7 @@ function LlamadaCard({
             </div>
             <div className="truncate font-mono text-xs text-muted-foreground">
               {r.ig ? `@${r.ig}` : "—"}
-              {r.pieza ? `  ·  ${r.pieza}` : ""}
+              {r.pieza ? `  ·  ${piezaLabel(r.pieza)}` : ""}
             </div>
           </Link>
           {r.resultado && r.resultado !== "pendiente" && <ResultadoBadge resultado={r.resultado} />}

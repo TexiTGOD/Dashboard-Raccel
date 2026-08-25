@@ -10,6 +10,7 @@ import { CuotasPanel } from "./cuotas-panel";
 import { GrabacionField } from "./grabacion-field";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { leerRespuestasCalendly, recortar } from "@/lib/calendly";
+import { piezaLabel } from "@/lib/pieza";
 import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
 
 type SaleWithPayments = Sale & { payments: Payment[] | null };
@@ -119,7 +120,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             {lead ? (
               <>
                 <div className="grid grid-cols-2 gap-5">
-                  <Field label="Pieza de origen" mono>{lead.pieza_origen}</Field>
+                  <Field label="Pieza de origen">{piezaLabel(lead.pieza_origen)}</Field>
                   <Field label="Calificación econ.">{lead.econ_calificacion?.replace("_", " ")}</Field>
                 </div>
                 {/* Dolor, Conciencia y "Lo que escribió (DM)" se dejaron de mostrar:

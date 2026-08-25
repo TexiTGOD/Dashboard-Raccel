@@ -20,9 +20,10 @@ import {
   ESTADOS_BOOKING,
   RESULTADOS_CALL,
 } from "@/lib/types";
+import { piezaLabel, piezaCategoria, CATEGORIA_LABEL } from "@/lib/pieza";
 import { updateLead, updateBooking, updateSale, updateCallResultado } from "./actions";
 
-type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor" | "bool";
+type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor" | "bool" | "pieza";
 type EditKind = "text" | "select" | "date" | "int";
 type Entity = "lead" | "booking" | "sale" | "call";
 
@@ -58,6 +59,7 @@ function fmtCell(v: unknown, type: ColType): string {
     case "date": return fmtFecha(String(v));
     case "dolor": return DOLOR_LABEL[String(v)] ?? String(v);
     case "bool": return v ? "si" : "";
+    case "pieza": return piezaLabel(v);
     default: return String(v);
   }
 }
@@ -241,7 +243,7 @@ function DataTable({
   }
 
   const alignOf = (t: ColType) =>
-    t === "bool" ? "text-center" : t === "text" || t === "dolor" || t === "date" ? "text-left" : "text-right";
+    t === "bool" ? "text-center" : t === "text" || t === "dolor" || t === "date" || t === "pieza" ? "text-left" : "text-right";
   // Densidad: "amplia" da filas altas y aireadas (Llamadas, estilo de la referencia).
   // "amplia" mantiene el aire VERTICAL (py-4) pero aprieta el horizontal: con 8
   // columnas, el padding lateral es lo que empujaba la tabla fuera del box.
@@ -514,7 +516,7 @@ const COLS = {
     { key: "lead_nombre", label: "Nombre", type: "text", ancho: "17%" },
     { key: "ig", label: "@IG", type: "text", ancho: "15%", render: (r) => <IgLink handle={r.ig} /> },
     { key: "whatsapp", label: "WhatsApp", type: "text", ancho: "14%" },
-    { key: "pieza", label: "Origen", type: "text", ancho: "10%" },
+    { key: "pieza", label: "Origen", type: "pieza", ancho: "10%" },
     { key: "closer", label: "Closer", type: "text", ancho: "14%", edit: { kind: "text", entity: "booking", field: "closer", idKey: "booking_id" } },
     { key: "fecha", label: "Fecha", type: "date", ancho: "11%" },
     { key: "estado", label: "Estado", type: "text", ancho: "10%", edit: { kind: "select", entity: "booking", field: "estado", idKey: "booking_id", options: estadoOpts } },
@@ -524,7 +526,7 @@ const COLS = {
     { key: "fecha", label: "Fecha", type: "date" },
     { key: "nombre", label: "Nombre", type: "text" },
     { key: "ig", label: "@IG", type: "text" },
-    { key: "pieza", label: "Pieza", type: "text", edit: { kind: "text", entity: "lead", field: "pieza_origen", idKey: "lead_id" } },
+    { key: "pieza", label: "Pieza", type: "pieza", edit: { kind: "text", entity: "lead", field: "pieza_origen", idKey: "lead_id" } },
     { key: "dolor", label: "Dolor", type: "dolor", edit: { kind: "select", entity: "lead", field: "dolor", idKey: "lead_id", options: dolorOpts } },
     { key: "conciencia", label: "Concien.", type: "int", edit: { kind: "select", entity: "lead", field: "conciencia", idKey: "lead_id", options: concienciaOpts } },
     { key: "econ_calificacion", label: "Econ.", type: "text" },
@@ -547,14 +549,15 @@ interface Counts {
   pagos_cash: number;
 }
 
-// Tipos de pieza del filtro de Leads. 'welcome' se compara entero (es el flujo de
-// bienvenida); el resto son prefijos de la pieza (REEL_0402, CARR_1103, …).
+// El filtro va por CATEGORÍA de display, no por el literal guardado: así una misma
+// opción agrupa los dos formatos (ej. "Posteo" junta REEL_/CARR_ viejos con
+// "Posteo - dd/mm/aaaa"). La clasificación vive en lib/pieza.ts.
 const TIPOS_PIEZA = [
   { value: "todos", label: "Todas las piezas" },
-  { value: "welcome", label: "welcome" },
-  { value: "REEL", label: "REEL" },
-  { value: "CARR", label: "CARR" },
-  { value: "HIST", label: "HIST" },
+  { value: "seguimientos", label: CATEGORIA_LABEL.seguimientos },
+  { value: "posteo", label: CATEGORIA_LABEL.posteo },
+  { value: "reel", label: CATEGORIA_LABEL.reel },
+  { value: "historias", label: CATEGORIA_LABEL.historias },
 ];
 
 const soloFecha = (v: unknown) => String(v ?? "").slice(0, 10); // ISO -> YYYY-MM-DD
@@ -637,15 +640,14 @@ export function RegistrosTables({
     const q = texto.trim().toLowerCase();
     return leads.filter((r) => {
       if (q) {
-        const campos = [r.nombre, r.ig, r.pieza].map((v) => String(v ?? "").toLowerCase());
+        // Busca contra el valor guardado Y contra el texto que se ve en pantalla,
+        // así escribir "posteo" encuentra también los REEL_/CARR_ viejos.
+        const campos = [r.nombre, r.ig, r.pieza, piezaLabel(r.pieza)].map((v) =>
+          String(v ?? "").toLowerCase(),
+        );
         if (!campos.some((c) => c.includes(q))) return false;
       }
-      if (tipo !== "todos") {
-        const p = String(r.pieza ?? "").trim();
-        if (tipo === "welcome") {
-          if (p.toLowerCase() !== "welcome") return false;
-        } else if (!p.toUpperCase().startsWith(`${tipo}_`)) return false;
-      }
+      if (tipo !== "todos" && piezaCategoria(r.pieza) !== tipo) return false;
       const f = soloFecha(r.fecha);
       if (desde && (!f || f < desde)) return false;
       if (hasta && (!f || f > hasta)) return false;

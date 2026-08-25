@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fmtInt, fmtMonto } from "@/lib/format";
+import { piezaLabel } from "@/lib/pieza";
 
 export interface AtribRow {
   pieza_origen: string;
@@ -42,7 +43,7 @@ function AtribCard({ r }: { r: AtribRow }) {
     <div className="flex h-full flex-col rounded-lg border border-border bg-card p-5 tabular-nums">
       <div className="flex items-center justify-between gap-2">
         <span className={`truncate font-mono text-sm ${invalida ? "text-danger" : "text-foreground"}`}>
-          {r.pieza_origen}
+          {piezaLabel(r.pieza_origen)}
         </span>
         {invalida && (
           <span className="shrink-0 rounded-full border border-danger px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-danger">
