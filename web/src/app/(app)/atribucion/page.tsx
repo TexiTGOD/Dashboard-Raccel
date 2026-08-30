@@ -20,7 +20,8 @@ export default async function AtribucionPage({
   return (
     <div className="tabular-nums">
       <PageHeader title="Atribución por pieza" period={period} />
-      <AttributionCards rows={rows as never} />
+      {/* desde/hasta deciden qué pieza es "del período" y cuál va a Meses anteriores. */}
+      <AttributionCards rows={rows as never} desde={period.desde} hasta={period.hasta} />
       <p className="mt-4 max-w-2xl font-mono text-xs text-[var(--text-muted)]">
         La métrica que decide qué contenido hacer mañana es Cash/lead: no cuál trae más gente, cuál
         trae la que paga. Ordenar por volumen miente; por cash/lead, dice la verdad.
