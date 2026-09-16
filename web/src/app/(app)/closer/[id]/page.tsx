@@ -11,6 +11,7 @@ import { GrabacionField } from "./grabacion-field";
 import { fmtFecha, fmtMonto } from "@/lib/format";
 import { leerRespuestasCalendly, recortar } from "@/lib/calendly";
 import { piezaLabel } from "@/lib/pieza";
+import { closerLabel } from "@/lib/closers";
 import type { Booking, Call, Cuota, Lead, Payment, Sale } from "@/lib/types";
 
 type SaleWithPayments = Sale & { payments: Payment[] | null };
@@ -172,7 +173,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
           <Panel title="La llamada">
             <div className="grid grid-cols-2 gap-5">
               <Field label="Fecha / hora" mono>{fmtFecha(b.fecha_llamada)}</Field>
-              <Field label="Closer" mono>{b.closer}</Field>
+              <Field label="Closer" mono>{closerLabel(b.closer)}</Field>
             </div>
             <Field label="Resumen de Fathom">
               {call?.resumen_fathom ? (

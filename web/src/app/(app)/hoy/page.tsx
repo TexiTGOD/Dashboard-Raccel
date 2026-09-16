@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadMetas } from "@/lib/dashboard";
 import { fmtFecha, fmtMonto, fmtDec } from "@/lib/format";
+import { closerLabel } from "@/lib/closers";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "../operaciones/_components/page-header";
 
@@ -143,7 +144,7 @@ export default async function HoyPage({
                     <div className="min-w-0">
                       <div className="truncate text-sm text-foreground">{b.lead?.nombre ?? b.nombre ?? "Sin nombre"}</div>
                       <div className="truncate font-mono text-xs text-muted-foreground">
-                        {b.closer ?? "—"} · {fmtFecha(b.fecha_llamada)}
+                        {closerLabel(b.closer)} · {fmtFecha(b.fecha_llamada)}
                       </div>
                     </div>
                     <span className="shrink-0 font-mono text-xs text-primary">cargar →</span>
