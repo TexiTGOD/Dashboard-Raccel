@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
 import { loadKpis, loadRpc } from "@/lib/dashboard";
 import { fmtInt, fmtMonto, fmtPct } from "@/lib/format";
+import { closerLabel } from "@/lib/closers";
 import type { Profile } from "@/lib/types";
 import { PageHeader } from "../operaciones/_components/page-header";
 import { EquipoRoster } from "./equipo-roster";
@@ -28,7 +29,7 @@ function CloserCard({ c }: { c: CloserRow }) {
   return (
     <div className="flex h-full flex-col rounded-lg border border-border bg-card p-5 tabular-nums">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-sm text-foreground">{c.closer}</span>
+        <span className="truncate font-mono text-sm text-foreground">{closerLabel(c.closer)}</span>
         {Number(c.pendientes) > 0 && (
           <span className="shrink-0 rounded-full border border-warning px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-warning">
             {fmtInt(c.pendientes)} pend

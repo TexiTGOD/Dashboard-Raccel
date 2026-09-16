@@ -21,9 +21,10 @@ import {
   RESULTADOS_CALL,
 } from "@/lib/types";
 import { piezaLabel, piezaCategoria, CATEGORIA_LABEL } from "@/lib/pieza";
+import { closerLabel, CLOSER_OPTIONS } from "@/lib/closers";
 import { updateLead, updateBooking, updateSale, updateCallResultado } from "./actions";
 
-type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor" | "bool" | "pieza";
+type ColType = "text" | "int" | "money" | "date" | "pct" | "dolor" | "bool" | "pieza" | "closer";
 type EditKind = "text" | "select" | "date" | "int";
 type Entity = "lead" | "booking" | "sale" | "call";
 
@@ -60,6 +61,7 @@ function fmtCell(v: unknown, type: ColType): string {
     case "dolor": return DOLOR_LABEL[String(v)] ?? String(v);
     case "bool": return v ? "si" : "";
     case "pieza": return piezaLabel(v);
+    case "closer": return closerLabel(String(v));
     default: return String(v);
   }
 }
@@ -243,7 +245,7 @@ function DataTable({
   }
 
   const alignOf = (t: ColType) =>
-    t === "bool" ? "text-center" : t === "text" || t === "dolor" || t === "date" || t === "pieza" ? "text-left" : "text-right";
+    t === "bool" ? "text-center" : t === "text" || t === "dolor" || t === "date" || t === "pieza" || t === "closer" ? "text-left" : "text-right";
   // Densidad: "amplia" da filas altas y aireadas (Llamadas, estilo de la referencia).
   // "amplia" mantiene el aire VERTICAL (py-4) pero aprieta el horizontal: con 8
   // columnas, el padding lateral es lo que empujaba la tabla fuera del box.
@@ -305,7 +307,7 @@ function DataTable({
                         // Con table-fixed el contenido largo se recorta (ellipsis)
                         // en lugar de ensanchar la tabla. El valor completo queda
                         // en el title, al pasar el mouse.
-                        title={fijo && !c.render && r[c.key] != null ? String(r[c.key]) : undefined}
+                        title={fijo && !c.render && r[c.key] != null ? fmtCell(r[c.key], c.type) : undefined}
                         className={[
                           "font-mono",
                           fijo ? "truncate" : "whitespace-nowrap",
@@ -506,7 +508,7 @@ const COLS = {
     { key: "fecha", label: "Cierre", type: "date", edit: { kind: "date", entity: "sale", field: "fecha_cierre", idKey: "sale_id" } },
     { key: "comprador", label: "Comprador", type: "text" },
     { key: "producto", label: "Producto", type: "text" },
-    { key: "closer", label: "Closer", type: "text", edit: { kind: "text", entity: "sale", field: "closer", idKey: "sale_id" } },
+    { key: "closer", label: "Closer", type: "closer", edit: { kind: "select", entity: "sale", field: "closer", idKey: "sale_id", options: CLOSER_OPTIONS } },
     { key: "valor_contrato", label: "Facturación", type: "money", total: true, emph: true },
     { key: "cash_collected", label: "Cash", type: "money", total: true, emph: true },
   ] as Col[],
@@ -517,7 +519,7 @@ const COLS = {
     { key: "ig", label: "@IG", type: "text", ancho: "15%", render: (r) => <IgLink handle={r.ig} /> },
     { key: "whatsapp", label: "WhatsApp", type: "text", ancho: "14%" },
     { key: "pieza", label: "Origen", type: "pieza", ancho: "10%" },
-    { key: "closer", label: "Closer", type: "text", ancho: "14%", edit: { kind: "text", entity: "booking", field: "closer", idKey: "booking_id" } },
+    { key: "closer", label: "Closer", type: "closer", ancho: "14%", edit: { kind: "select", entity: "booking", field: "closer", idKey: "booking_id", options: CLOSER_OPTIONS } },
     { key: "fecha", label: "Fecha", type: "date", ancho: "11%" },
     { key: "estado", label: "Estado", type: "text", ancho: "10%", edit: { kind: "select", entity: "booking", field: "estado", idKey: "booking_id", options: estadoOpts } },
     { key: "resultado", label: "Resultado", type: "text", ancho: "9%", edit: { kind: "select", entity: "call", field: "resultado", idKey: "booking_id", options: resultadoOpts } },

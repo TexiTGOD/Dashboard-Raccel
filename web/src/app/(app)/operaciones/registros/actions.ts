@@ -40,8 +40,11 @@ export async function updateBooking(input: { bookingId: string; patch: Patch }):
   const uid = await adminUid();
   if (!uid) return { error: "No autorizado" };
   const patch = pick(input.patch, ["closer", "estado"]);
+  // Corrección a mano del closer: sella closer_manual para que la regla
+  // automática Linda→Betina no la vuelva a pisar en un update posterior.
+  const closerManual = "closer" in patch ? { closer_manual: true } : {};
   const supabase = await createClient();
-  const { error } = await supabase.from("bookings").update({ ...patch, updated_by: uid }).eq("id", input.bookingId);
+  const { error } = await supabase.from("bookings").update({ ...patch, ...closerManual, updated_by: uid }).eq("id", input.bookingId);
   if (error) return { error: error.message };
   revalidatePath("/operaciones/registros");
   return { ok: true };
@@ -81,8 +84,12 @@ export async function updateSale(input: { saleId: string; patch: Patch }): Promi
   const uid = await adminUid();
   if (!uid) return { error: "No autorizado" };
   const patch = pick(input.patch, ["closer", "fecha_cierre"]);
+  // Corrección a mano del closer: sella closer_manual para que no vuelva a
+  // heredar el closer del booking en un futuro insert (no aplica a updates,
+  // pero se sella igual por consistencia con bookings).
+  const closerManual = "closer" in patch ? { closer_manual: true } : {};
   const supabase = await createClient();
-  const { error } = await supabase.from("sales").update({ ...patch, updated_by: uid }).eq("id", input.saleId);
+  const { error } = await supabase.from("sales").update({ ...patch, ...closerManual, updated_by: uid }).eq("id", input.saleId);
   if (error) return { error: error.message };
   revalidatePath("/operaciones/registros");
   return { ok: true };
