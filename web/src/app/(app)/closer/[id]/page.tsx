@@ -114,118 +114,133 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
         <EstadoBadge estado={b.estado} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr] lg:items-start">
-        {/* Columna izquierda: contexto */}
-        <div className="space-y-4">
-          <Panel title="Contexto del lead">
-            {lead ? (
-              <>
-                <div className="grid grid-cols-2 gap-5">
-                  <Field label="Pieza de origen">{piezaLabel(lead.pieza_origen)}</Field>
-                  <Field label="Calificación econ.">{lead.econ_calificacion?.replace("_", " ")}</Field>
-                </div>
-                {/* Dolor, Conciencia y "Lo que escribió (DM)" se dejaron de mostrar:
-                    vienen de la automatización de ManyChat que ya no se usa (el DM
-                    llegaba con el placeholder crudo). Siguen en la base, sin borrar. */}
-                {lead.respuesta_lead_2 && (
-                  <div>
-                    <div className="micro-label mb-2">Profundización</div>
-                    <blockquote className="dm-quote whitespace-pre-wrap">{lead.respuesta_lead_2}</blockquote>
-                  </div>
-                )}
-                {lead.respuesta_econ && <Field label="Respuesta económica">{lead.respuesta_econ}</Field>}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Este booking todavía no matcheó con un lead.
-              </p>
-            )}
-
-            {/* Lo que respondió el prospecto al agendar. Vive en el booking, así que
-                se muestra aunque no haya lead matcheado. */}
-            <div className="space-y-4 border-t border-border pt-4">
-              <div className="micro-label">Respondió al agendar</div>
+      {/* Contexto del lead + La llamada: información de referencia, compacta,
+          lado a lado — no compiten por espacio con el Desenlace. */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <Panel title="Contexto del lead">
+          {lead ? (
+            <>
               <div className="grid grid-cols-2 gap-5">
-                <Field label="Teléfono / WhatsApp" mono>{libre(qa.telefono, 40)}</Field>
-                <Field label="Recursos" mono>{qa.recursos}</Field>
-                <Field label="Objetivo">{qa.objetivo}</Field>
-                <Field label="Decisor">{qa.decisor}</Field>
+                <Field label="Pieza de origen">{piezaLabel(lead.pieza_origen)}</Field>
+                <Field label="Calificación econ.">{lead.econ_calificacion?.replace("_", " ")}</Field>
               </div>
-              <Field label="Sentimientos">{libre(qa.sentimientos)}</Field>
-              <Field label="Trabajo">{libre(qa.trabajo)}</Field>
-
-              {/* Red de seguridad: si el formulario cambió tanto que no se reconoció
-                  ninguna pregunta, mostrar los pares crudos en vez de 6 guiones. */}
-              {sinReconocer && (
-                <div className="space-y-2">
-                  <div className="micro-label">Otras respuestas</div>
-                  {otrasRespuestas.map((p, i) => (
-                    <div key={i} className="text-sm">
-                      <span className="text-muted-foreground">{p.pregunta || "—"}: </span>
-                      <span className="text-foreground">{recortar(p.respuesta, 120)}</span>
-                    </div>
-                  ))}
+              {/* Dolor, Conciencia y "Lo que escribió (DM)" se dejaron de mostrar:
+                  vienen de la automatización de ManyChat que ya no se usa (el DM
+                  llegaba con el placeholder crudo). Siguen en la base, sin borrar. */}
+              {lead.respuesta_lead_2 && (
+                <div>
+                  <div className="micro-label mb-2">Profundización</div>
+                  <blockquote className="dm-quote whitespace-pre-wrap">{lead.respuesta_lead_2}</blockquote>
                 </div>
               )}
-            </div>
-          </Panel>
+              {lead.respuesta_econ && <Field label="Respuesta económica">{lead.respuesta_econ}</Field>}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Este booking todavía no matcheó con un lead.
+            </p>
+          )}
 
-          <Panel title="La llamada">
+          {/* Lo que respondió el prospecto al agendar. Vive en el booking, así que
+              se muestra aunque no haya lead matcheado. */}
+          <div className="space-y-4 border-t border-border pt-4">
+            <div className="micro-label">Respondió al agendar</div>
             <div className="grid grid-cols-2 gap-5">
-              <Field label="Fecha / hora" mono>{fmtFecha(b.fecha_llamada)}</Field>
-              <Field label="Closer" mono>{closerLabel(b.closer)}</Field>
+              <Field label="Teléfono / WhatsApp" mono>{libre(qa.telefono, 40)}</Field>
+              <Field label="Recursos" mono>{qa.recursos}</Field>
+              <Field label="Objetivo">{qa.objetivo}</Field>
+              <Field label="Decisor">{qa.decisor}</Field>
             </div>
-            <Field label="Resumen de Fathom">
-              {call?.resumen_fathom ? (
-                <span className="whitespace-pre-wrap">{call.resumen_fathom}</span>
-              ) : (
-                <span className="text-muted-foreground">Todavía no hay resumen.</span>
-              )}
-            </Field>
-            <GrabacionField bookingId={b.id} url={b.grabacion_url ?? null} />
-          </Panel>
-        </div>
+            <Field label="Sentimientos">{libre(qa.sentimientos)}</Field>
+            <Field label="Trabajo">{libre(qa.trabajo)}</Field>
 
-        {/* Columna derecha: lo que escribe el closer + venta */}
-        <div className="space-y-4">
-          <Panel title="Desenlace">
-            <OutcomeForm
-              bookingId={b.id}
-              estado={b.estado ?? "programada"}
-              resultado={call?.resultado ?? "pendiente"}
-              notas={call?.notas_closer ?? ""}
-              calificado={b.calificado ?? null}
-            />
-          </Panel>
-
-          <Panel title="Venta">
-            {sale ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-5">
-                  <Field label="Valor contrato" mono>{fmtMonto(sale.valor_contrato, sale.moneda)}</Field>
-                  <Field label="Cash collected" mono>{fmtMonto(cashCollected, sale.moneda)}</Field>
-                  <Field label="Tipo">{sale.tipo}</Field>
-                  <Field label="Producto">{sale.producto}</Field>
-                  <Field label="Cuotas" mono>
-                    {sale.cuotas_total ? `${payments.length}/${sale.cuotas_total}` : String(payments.length)}
-                  </Field>
-                  <Field label="Status" mono>{sale.status}</Field>
-                </div>
-
-                <CuotasPanel bookingId={b.id} moneda={sale.moneda ?? "USD"} cuotas={cuotas} />
+            {/* Red de seguridad: si el formulario cambió tanto que no se reconoció
+                ninguna pregunta, mostrar los pares crudos en vez de 6 guiones. */}
+            {sinReconocer && (
+              <div className="space-y-2">
+                <div className="micro-label">Otras respuestas</div>
+                {otrasRespuestas.map((p, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="text-muted-foreground">{p.pregunta || "—"}: </span>
+                    <span className="text-foreground">{recortar(p.respuesta, 120)}</span>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <ManualSaleForm
-                bookingId={b.id}
-                leadId={b.lead_id}
-                defaultEmail={b.email ?? ""}
-                defaultNombre={lead?.nombre ?? b.nombre ?? ""}
-                bookingFutura={bookingFutura}
-              />
             )}
-          </Panel>
-        </div>
+          </div>
+        </Panel>
+
+        <Panel title="La llamada">
+          <div className="grid grid-cols-2 gap-5">
+            <Field label="Fecha / hora" mono>{fmtFecha(b.fecha_llamada)}</Field>
+            <Field label="Closer" mono>{closerLabel(b.closer)}</Field>
+          </div>
+          <Field label="Resumen de Fathom">
+            {call?.resumen_fathom ? (
+              <span className="whitespace-pre-wrap">{call.resumen_fathom}</span>
+            ) : (
+              <span className="text-muted-foreground">Todavía no hay resumen.</span>
+            )}
+          </Field>
+          <GrabacionField bookingId={b.id} url={b.grabacion_url ?? null} />
+        </Panel>
       </div>
+
+      {/* Encabezado sticky: nombre + pieza quedan visibles mientras se scrollea
+          el desenlace (10 campos, no entra todo en una pantalla). Fuera del
+          Card a propósito: Card tiene overflow-hidden, que rompe el sticky. */}
+      <div className="sticky top-0 z-10 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-border bg-card px-5 py-3 shadow-sm">
+        <span className="font-heading text-sm font-bold text-foreground">
+          {lead?.nombre ?? b.nombre ?? "Sin nombre"}
+        </span>
+        <span className="micro-label text-muted-foreground">{piezaLabel(lead?.pieza_origen ?? null)}</span>
+      </div>
+
+      {/* Desenlace: lo que completa la closer después de colgar. Es la acción
+          principal de la página — ancho completo, no una columna angosta. */}
+      <Panel title="Desenlace">
+        <OutcomeForm
+          bookingId={b.id}
+          estado={b.estado ?? "programada"}
+          resultado={call?.resultado ?? "pendiente"}
+          notas={call?.notas_closer ?? ""}
+          calificado={b.calificado ?? null}
+          productoOfrecido={call?.producto_ofrecido ?? null}
+          precioOfrecido={call?.precio_ofrecido ?? null}
+          dolorPrincipal={call?.dolor_principal ?? null}
+          dolorExtra={call?.dolor_extra ?? ""}
+          objeciones={call?.objeciones ?? []}
+          objecionesExtra={call?.objeciones_extra ?? ""}
+          proximoSeguimiento={call?.proximo_seguimiento ?? null}
+        />
+      </Panel>
+
+      <Panel title="Venta">
+        {sale ? (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+              <Field label="Valor contrato" mono>{fmtMonto(sale.valor_contrato, sale.moneda)}</Field>
+              <Field label="Cash collected" mono>{fmtMonto(cashCollected, sale.moneda)}</Field>
+              <Field label="Tipo">{sale.tipo}</Field>
+              <Field label="Producto">{sale.producto}</Field>
+              <Field label="Cuotas" mono>
+                {sale.cuotas_total ? `${payments.length}/${sale.cuotas_total}` : String(payments.length)}
+              </Field>
+              <Field label="Status" mono>{sale.status}</Field>
+            </div>
+
+            <CuotasPanel bookingId={b.id} moneda={sale.moneda ?? "USD"} cuotas={cuotas} />
+          </div>
+        ) : (
+          <ManualSaleForm
+            bookingId={b.id}
+            leadId={b.lead_id}
+            defaultEmail={b.email ?? ""}
+            defaultNombre={lead?.nombre ?? b.nombre ?? ""}
+            bookingFutura={bookingFutura}
+          />
+        )}
+      </Panel>
     </div>
   );
 }
