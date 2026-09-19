@@ -3,11 +3,15 @@
 // Conviven DOS formatos y hay que distinguirlos por la FORMA del string, no por la
 // palabra:
 //
-//   VIEJO (guion bajo, sin año)      NUEVO ("<Tipo> - dd/mm/aaaa")
+//   VIEJO (guion bajo, sin año)      NUEVO ("<Tipo> - D/M/AAAA")
 //   REEL_DDMM  -> Posteo             "Reel - 04/08/2026"     -> Reel (reel real)
-//   CARR_DDMM  -> Posteo             "Posteo - 04/08/2026"   -> Posteo
-//   HIST_DDMM  -> Historias          "Historia - 04/08/2026" -> Historias
+//   CARR_DDMM  -> Posteo             "Posteo - 4/8/2026"     -> Posteo
+//   HIST_DDMM  -> Historias          "Historia - 4/8/2026"   -> Historias
 //   welcome    -> Seguimientos
+//
+// El formato nuevo se carga a mano en ManyChat: día y mes de 1 o 2 dígitos, año
+// de 4, y a veces una nota al final ("Posteo - 8/9/2026 No eleguida"). La fecha
+// tiene que existir (31/9 o 45/9 no se reconocen: así un tipeo se ve en Atribución).
 //
 // La trampa: los REEL_ viejos estaban mal etiquetados (eran carruseles), así que
 // "Reel" en formato viejo NO es un reel. Un REEL_0408 y un "Reel - 04/08/2026" son
@@ -35,7 +39,9 @@ const BUCKETS_ESPECIALES = new Set(["Sin atribuir", "Pieza inválida"]);
 // un mismo lead se vería "Posteo del 04/02" en Registros y "Pieza inválida" en
 // Atribución. El formato nuevo sí es case-insensitive en ambos lados.
 const VIEJO = /^(REEL|CARR|HIST)_(\d{2})(\d{2})$/;
-const NUEVO = /^(reel|posteo|historia)\s*-\s*(\d{2})\/(\d{2})\/(\d{4})$/i;
+// Después del año (exactamente 4 dígitos) puede venir texto, pero no otro dígito:
+// "8/9/20261" es un tipeo y no se traga. Espejo de pieza_nueva_canonica() (SQL).
+const NUEVO = /^(reel|posteo|historia)\s*-\s*(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\D[\s\S]*)?$/i;
 
 /**
  * Fecha de la pieza. OJO con `anio`: el formato viejo (REEL_DDMM) NO lo trae, así
@@ -86,6 +92,14 @@ function fechaReal(dia: number, mes: number): boolean {
   return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31;
 }
 
+/** Fecha completa del formato nuevo: el día tiene que existir en ese mes y año. */
+function fechaExiste(dia: number, mes: number, anio: number): boolean {
+  if (anio < 2000 || anio > 2100 || mes < 1 || mes > 12 || dia < 1) return false;
+  return dia <= new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+}
+
+const dos = (n: number) => String(n).padStart(2, "0");
+
 /** Parsea un pieza_origen (o un bucket de atribución) a categoría + texto legible. */
 export function leerPieza(raw: unknown): Pieza {
   const s = String(raw ?? "").trim();
@@ -111,20 +125,24 @@ export function leerPieza(raw: unknown): Pieza {
       : { categoria: "posteo", label: `Posteo del ${dd}/${mm}`, fecha };
   }
 
-  // Formato nuevo: acá "Reel" SÍ es un reel real.
+  // Formato nuevo: acá "Reel" SÍ es un reel real. Si el regex matchea pero la
+  // fecha no existe, se trata como no reconocida (cae al final).
   const n = s.match(NUEVO);
   if (n) {
     const [, tipo, dd, mm, aaaa] = n;
-    // Formato nuevo: el año viene en el dato, no se infiere nada.
-    const d = Number(dd), m = Number(mm);
-    const fecha: FechaPieza | null = fechaReal(d, m) ? { dia: d, mes: m, anio: Number(aaaa) } : null;
-    switch (tipo.toLowerCase()) {
-      case "reel":
-        return { categoria: "reel", label: `Reel del ${dd}/${mm}`, fecha };
-      case "historia":
-        return { categoria: "historias", label: `Secuencia de Historias del ${dd}/${mm}`, fecha };
-      default:
-        return { categoria: "posteo", label: `Posteo del ${dd}/${mm}`, fecha };
+    const d = Number(dd), m = Number(mm), a = Number(aaaa);
+    if (fechaExiste(d, m, a)) {
+      // El año viene en el dato, no se infiere nada (resolverAnio le da prioridad).
+      const fecha: FechaPieza = { dia: d, mes: m, anio: a };
+      const ddmm = `${dos(d)}/${dos(m)}`;
+      switch (tipo.toLowerCase()) {
+        case "reel":
+          return { categoria: "reel", label: `Reel del ${ddmm}`, fecha };
+        case "historia":
+          return { categoria: "historias", label: `Secuencia de Historias del ${ddmm}`, fecha };
+        default:
+          return { categoria: "posteo", label: `Posteo del ${ddmm}`, fecha };
+      }
     }
   }
 

@@ -22,7 +22,17 @@ export interface AtribRow {
   cash_por_lead: number;
 }
 
+/** Valor crudo de Origen que cayó en "Pieza inválida" (dashboard_piezas_invalidas). */
+export interface InvalidaRow {
+  valor_crudo: string | null;
+  leads: number;
+}
+
 const usd = (n: number) => fmtMonto(n, "USD");
+
+// El valor crudo se muestra entre comillas y con los invisibles a la vista (tab,
+// salto de línea, espacio no separable): un tipeo que no se ve no se puede corregir.
+const verCrudo = (v: string | null) => JSON.stringify(v ?? "").replace(/\u00a0/g, "\\u00a0");
 
 // El cash/lead es LA métrica (qué contenido trae la gente que paga). El orden se
 // aplica DENTRO de cada grupo del timeline: la estructura primaria es la fecha.
@@ -123,6 +133,58 @@ function PiezaCard({ it, abierta, onToggle }: { it: Item; abierta: boolean; onTo
   );
 }
 
+/**
+ * La card de "Pieza inválida": siempre visible (no se esconde en "Meses anteriores")
+ * y con la lista de valores crudos abierta, para que un error de tipeo en ManyChat
+ * se vea al toque.
+ */
+function InvalidasCard({ it, crudos }: { it: Item; crudos: InvalidaRow[] }) {
+  return (
+    <div className="rounded-lg border border-border border-l-2 border-l-danger bg-card">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-mono text-sm text-danger">{it.label}</span>
+          <span className="shrink-0 rounded-full border border-danger px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-danger">
+            inválida
+          </span>
+        </span>
+        <span className="shrink-0 font-mono text-sm tabular-nums text-foreground">
+          {fmtInt(it.leads)} <span className="micro-label">leads</span>
+        </span>
+      </div>
+      <div className="space-y-3 border-t border-border px-4 py-3">
+        <p className="text-xs text-muted-foreground">
+          Valores de Origen que no se pudieron leer. Formatos válidos: <span className="font-mono">Posteo - 14/9/2026</span>,{" "}
+          <span className="font-mono">Reel - …</span>, <span className="font-mono">Historia - …</span> (día y mes de 1 o 2
+          dígitos, año de 4) o el formato viejo <span className="font-mono">REEL_1409</span>. Se corrigen en ManyChat o
+          en Registros (columna Pieza).
+        </p>
+        {crudos.length === 0 ? (
+          <p className="text-xs text-warning">
+            No se pudo cargar el detalle de valores (¿falta aplicar la migración de dashboard_piezas_invalidas?).
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {crudos.map((c) => (
+              <li key={c.valor_crudo ?? ""} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 break-all font-mono text-sm text-foreground">{verCrudo(c.valor_crudo)}</span>
+                <span className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
+                  {fmtInt(Number(c.leads))} <span className="micro-label">leads</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3 font-mono text-xs text-muted-foreground">
+          <span>Agendas {fmtInt(it.agendas)}</span>
+          <span>Ventas {fmtInt(it.ventas)}</span>
+          <span>Cash {usd(it.cash_collected)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Un nodo del timeline: la fecha a la izquierda, las piezas de ese día a la derecha. */
 function NodoFecha({
   items,
@@ -174,10 +236,13 @@ function NodoFecha({
 
 export function AttributionCards({
   rows,
+  invalidas,
   desde,
   hasta,
 }: {
   rows: AtribRow[];
+  /** Valores crudos que cayeron en "Pieza inválida" (misma suma que su card). */
+  invalidas: InvalidaRow[];
   /** Límites del período activo (YYYY-MM-DD): deciden qué es "del mes" y qué "anterior". */
   desde: string;
   hasta: string;
@@ -194,7 +259,7 @@ export function AttributionCards({
       return next;
     });
 
-  const { seguimientos, delPeriodo, anteriores, totales } = useMemo(() => {
+  const { seguimientos, invalida, delPeriodo, anteriores, totales } = useMemo(() => {
     const ref = new Date(`${hasta}T00:00:00Z`);
     const dDesde = new Date(`${desde}T00:00:00Z`).getTime();
     const dHasta = ref.getTime();
@@ -232,13 +297,17 @@ export function AttributionCards({
 
     // Seguimientos va aparte: no tiene fecha, no entra al timeline.
     const seguimientos = items.filter((i) => i.categoria === "seguimientos");
-    const conFecha = items.filter((i) => i.categoria !== "seguimientos");
+    // La inválida no tiene fecha: sección propia y siempre visible (no se pierde
+    // en "Meses anteriores", que está colapsado).
+    const invalida = items.find((i) => i.invalida) ?? null;
+    const conFecha = items.filter((i) => i.categoria !== "seguimientos" && !i.invalida);
 
     // "Del período" = la pieza se publicó dentro del rango elegido. El resto son
     // piezas viejas que igual aparecen porque trajeron leads en el período.
     const dentro = (i: Item) => i.orden != null && i.orden >= dDesde && i.orden <= dHasta;
     return {
       seguimientos,
+      invalida,
       delPeriodo: conFecha.filter(dentro),
       anteriores: conFecha.filter((i) => !dentro(i)),
       totales,
@@ -309,6 +378,13 @@ export function AttributionCards({
               onToggle={() => toggle(it.pieza_origen)}
             />
           ))}
+        </section>
+      )}
+
+      {invalida && (
+        <section className="space-y-2">
+          <h2 className="section-title border-b border-border pb-2">Pieza inválida</h2>
+          <InvalidasCard it={invalida} crudos={invalidas} />
         </section>
       )}
 

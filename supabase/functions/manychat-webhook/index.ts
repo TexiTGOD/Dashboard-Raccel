@@ -8,6 +8,7 @@ import { serviceClient } from "../_shared/client.ts";
 import { checkSecret } from "../_shared/auth.ts";
 import { json, readJson, requirePost, toBool } from "../_shared/http.ts";
 import { normalizeHandle } from "../_shared/normalize.ts";
+import { piezaEsInvalida } from "./pieza-valida.ts";
 
 Deno.serve(async (req) => {
   const notPost = requirePost(req);
@@ -50,12 +51,10 @@ Deno.serve(async (req) => {
   // válidos (ej. el literal 'REEL_DDMM' sin reemplazar en la plantilla). Se guarda
   // igual (el dashboard la muestra en el bucket 'Pieza inválida'), pero se loguea.
   //   viejo: REEL_DDMM / CARR_DDMM / HIST_DDMM / welcome
-  //   nuevo: "<Tipo> - dd/mm/aaaa"  (Reel / Posteo / Historia)
-  // Espejo de public.pieza_bucket() y de web/src/lib/pieza.ts: si cambia un
-  // formato, se tocan los tres.
-  const PIEZA_VALIDA =
-    /^(REEL|CARR|HIST)_\d{4}$|^\s*(reel|posteo|historia)\s*-\s*\d{2}\/\d{2}\/\d{4}\s*$|^\s*welcome\s*$/i;
-  if (record.pieza_origen && !PIEZA_VALIDA.test(String(record.pieza_origen))) {
+  //   nuevo: "<Tipo> - D/M/AAAA" + texto opcional (Reel / Posteo / Historia)
+  // La regla vive en ./pieza-valida.ts (espejo de public.pieza_bucket() y de
+  // web/src/lib/pieza.ts: si cambia un formato, se tocan los tres).
+  if (record.pieza_origen && piezaEsInvalida(String(record.pieza_origen))) {
     console.warn(
       `ALARMA pieza_origen inválida: "${record.pieza_origen}" (contacto ${record.manychat_contact_id})`,
     );
