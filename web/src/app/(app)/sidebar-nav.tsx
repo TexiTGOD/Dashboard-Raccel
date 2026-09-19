@@ -19,6 +19,7 @@ const byRol: Record<Rol, { href: string; label: string }[]> = {
   ],
   closer: [
     { href: "/closer", label: "Llamadas" },
+    { href: "/panel", label: "Panel" },
   ],
   setter: [{ href: "/setter", label: "Métricas" }],
 };
@@ -29,7 +30,16 @@ function activeHref(pathname: string, hrefs: string[]): string | null {
   return matches.sort((a, b) => b.length - a.length)[0];
 }
 
-export function SidebarNav({ rol, horizontal }: { rol: Rol; horizontal?: boolean }) {
+export function SidebarNav({
+  rol,
+  horizontal,
+  llamadasPendientes = 0,
+}: {
+  rol: Rol;
+  horizontal?: boolean;
+  /** Seguimientos pendientes — badge junto a "Llamadas" (admin/closer). */
+  llamadasPendientes?: number;
+}) {
   const pathname = usePathname();
   const items = byRol[rol] ?? [];
   const active = activeHref(pathname, items.map((i) => i.href));
@@ -44,17 +54,23 @@ export function SidebarNav({ rol, horizontal }: { rol: Rol; horizontal?: boolean
     >
       {items.map((it) => {
         const on = it.href === active;
+        const badge = it.href === "/closer" && llamadasPendientes > 0 ? llamadasPendientes : null;
         return (
           <Link
             key={it.href}
             href={it.href}
-            className={`whitespace-nowrap rounded-md px-3 py-2 transition-colors ${
+            className={`flex items-center justify-between gap-2 whitespace-nowrap rounded-md px-3 py-2 transition-colors ${
               on
                 ? "bg-[var(--neon-active)] text-primary"
                 : "text-muted-foreground hover:bg-[var(--surface-elevated)] hover:text-foreground"
             }`}
           >
-            {it.label}
+            <span>{it.label}</span>
+            {badge != null && (
+              <span className="rounded-full bg-danger/20 px-1.5 font-mono text-[11px] text-danger">
+                {badge}
+              </span>
+            )}
           </Link>
         );
       })}

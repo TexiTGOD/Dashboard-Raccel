@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ymd, parseYmd, presets, type Period } from "@/lib/period";
 
@@ -81,6 +81,7 @@ function MonthGrid({
 export function RangePicker({ period }: { period: Period }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [desde, setDesde] = useState<Date | null>(parseYmd(period.desde));
   const [hasta, setHasta] = useState<Date | null>(parseYmd(period.hasta));
@@ -104,8 +105,14 @@ export function RangePicker({ period }: { period: Period }) {
     }
   }
 
+  // Preserva cualquier otro filtro que ya esté en la URL (ej. vista/resultado
+  // de la Lista de llamadas) — antes pisaba TODOS los query params.
   function navegar(dDesde: string, dHasta: string) {
-    router.push(`${pathname}?desde=${dDesde}&hasta=${dHasta}`);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("periodo");
+    params.set("desde", dDesde);
+    params.set("hasta", dHasta);
+    router.push(`${pathname}?${params.toString()}`);
     setOpen(false);
   }
 

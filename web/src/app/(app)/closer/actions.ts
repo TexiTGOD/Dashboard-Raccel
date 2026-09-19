@@ -195,7 +195,31 @@ export async function createManualSale(input: {
   // El trigger ya generó las cuotas esperadas; marcamos la cuota 1 como cobrada.
   await supabase.from("cuotas").update({ payment_id: pay.id }).eq("sale_id", sale.id).eq("numero_cuota", 1);
 
+  // Una venta cargada implica que se vendió: si el resultado de la llamada
+  // no era "vendido" ya, se actualiza solo. proximo_seguimiento se limpia en
+  // el mismo update (si tenía uno de un follow_up) — el constraint
+  // calls_seguimiento_solo_follow_up exige que vaya junto con el cambio de
+  // resultado, no en un paso aparte.
+  const { data: existingCall } = await supabase
+    .from("calls")
+    .select("id, resultado")
+    .eq("booking_id", input.bookingId)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingCall) {
+    if (existingCall.resultado !== "vendido") {
+      await supabase
+        .from("calls")
+        .update({ resultado: "vendido", proximo_seguimiento: null })
+        .eq("id", existingCall.id);
+    }
+  } else {
+    await supabase.from("calls").insert({ booking_id: input.bookingId, resultado: "vendido" });
+  }
+
   revalidatePath(`/closer/${input.bookingId}`);
+  revalidatePath("/closer");
   return { ok: true };
 }
 

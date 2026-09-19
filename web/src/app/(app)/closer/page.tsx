@@ -1,134 +1,88 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { periodFromParams } from "@/lib/period";
-import { fetchAllRpcRows, loadMetas } from "@/lib/dashboard";
-import { fmtInt, fmtMonto, fmtPct } from "@/lib/format";
+import { fetchAllRpcRows } from "@/lib/dashboard";
 import { PageHeader } from "../operaciones/_components/page-header";
 import { PipelineBoard, type PipelineCounts, type PipelineRow } from "./pipeline-board";
+import { ListaLlamadas } from "./lista-llamadas";
+import type { LlamadaListaRow, VistaLlamadas } from "@/lib/types";
 
-const usd = (n: number | null) => fmtMonto(n, "USD");
-
-// --- panel de métricas (mismo estilo que /setter) --------------------------
-
-function Volumen({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-      <div className="micro-label">{label}</div>
-      <div className="mt-2 font-mono text-4xl leading-none text-foreground">{fmtInt(value)}</div>
-    </div>
-  );
+// Link server-side al modo Pipeline/Lista, preservando el resto de los query
+// params (período, filtros de Lista) — no es un componente cliente, así que
+// arma el href a mano en vez de useSearchParams.
+function hrefModo(sp: Record<string, string | undefined>, modo: "pipeline" | "lista"): string {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) if (v) params.set(k, v);
+  params.set("modo", modo);
+  return `/closer?${params.toString()}`;
 }
 
-function Ratio({
-  label,
-  value,
-  num,
-  den,
-  unidad,
-}: {
-  label: string;
-  value: number | null;
-  num: number | null;
-  den: number;
-  unidad: string;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-      <div className="micro-label">{label}</div>
-      <div className="mt-2 font-mono text-3xl leading-none text-foreground">
-        {value == null ? "—" : fmtPct(value)}
-      </div>
-      <div className="mt-2 font-mono text-xs text-muted-foreground">
-        {num == null ? "—" : `${fmtInt(num)} de ${fmtInt(den)} ${unidad}`}
-      </div>
-    </div>
-  );
-}
-
-/** Actual vs objetivo mensual, con barra de avance. Se oculta por fuera (ver
- * `period.esMesCompleto` en la página) si el rango no es un mes calendario. */
-function Meta({
-  label,
-  actual,
-  objetivo,
-  fmt,
-}: {
-  label: string;
-  actual: number | null;
-  objetivo: number | null;
-  fmt: (n: number) => string;
-}) {
-  if (objetivo == null) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-        <div className="micro-label">{label}</div>
-        <p className="mt-2 text-sm text-muted-foreground">Sin meta cargada para este mes.</p>
-      </div>
-    );
-  }
-  const cumple = actual != null && actual >= objetivo;
-  const avance = objetivo > 0 && actual != null ? actual / objetivo : null;
-  return (
-    <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div className="flex items-baseline gap-3">
-          <span className="micro-label">{label}</span>
-        </div>
-        <span
-          className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.08em] ${
-            cumple ? "border-success text-success" : "border-warning text-warning"
-          }`}
-        >
-          {cumple ? "por arriba del objetivo" : "por debajo del objetivo"}
-        </span>
-      </div>
-      <div className="mt-2 flex items-baseline gap-3">
-        <span className="font-mono text-3xl leading-none text-foreground">
-          {actual == null ? "—" : fmt(actual)}
-        </span>
-        <span className="font-mono text-sm text-muted-foreground">objetivo {fmt(objetivo)}</span>
-      </div>
-      <div className="mt-4 h-1 w-full bg-[var(--surface-elevated)]">
-        <div
-          className="h-1 bg-primary"
-          style={{ width: `${Math.min(Math.max((avance ?? 0) * 100, 0), 100)}%` }}
-        />
-      </div>
-      <div className="mt-2 font-mono text-xs text-muted-foreground">
-        {avance == null ? "—" : `${fmtPct(avance)} del objetivo del mes`}
-      </div>
-    </div>
-  );
-}
-
-// --- página -----------------------------------------------------------------
-
-// Pipeline de llamadas: columnas por estado + archivado colapsable, más el
-// panel de métricas/comisión propio del closer. La clase de cada llamada y
-// los conteos por columna se calculan en la BASE (dashboard_pipeline_llamadas
-// / _counts / dashboard_closer_metricas). El front agrupa y formatea nada más.
+// Llamadas: Pipeline (kanban por estado) + Lista (tabla/cards con accesos
+// rápidos). El panel de métricas/comisión de la closer vive aparte, en
+// /panel — son dos tareas distintas (mirar el mes vs. trabajar la lista) y
+// competían por espacio en una sola página.
 export default async function CloserPage({
   searchParams,
 }: {
-  searchParams: Promise<{ desde?: string; hasta?: string; periodo?: string }>;
+  searchParams: Promise<{
+    desde?: string; hasta?: string; periodo?: string;
+    modo?: string; vista?: string;
+    resultado?: string; producto?: string; objecion?: string; closer?: string;
+  }>;
 }) {
-  // El panel muestra cash y comisión: solo la closer y el admin (que ya ve el
-  // pipeline entero vía RLS). Cualquier otro rol autenticado queda afuera.
   const profile = await requireProfile();
   if (profile.rol !== "admin" && profile.rol !== "closer") redirect("/");
-  // El panel de métricas/comisión es SOLO para la closer, no para admin: los
-  // números salen de current_closer_identifier(), que para un admin es NULL
-  // (Linda es admin, no closer) — mostrarían todo en cero. El admin ya tiene
-  // Equipo (todos los closers comparados) y Operaciones (negocio completo).
   const esCloser = profile.rol === "closer";
 
-  const period = periodFromParams(await searchParams);
+  const sp = await searchParams;
+  const period = periodFromParams(sp);
   const supabase = await createClient();
   const args = { p_start: period.startStr, p_end: period.endStr };
 
-  const { data: countsData } = await supabase.rpc("dashboard_pipeline_llamadas_counts", args);
-  const c = (countsData?.[0] ?? {}) as Record<string, number | null>;
+  // Pipeline es la vista por defecto (para closer y admin); Lista queda a un
+  // click para trabajar la tabla con filtros y accesos rápidos.
+  const modo = sp.modo === "lista" ? "lista" : "pipeline";
+  const vistaDefault: VistaLlamadas = esCloser ? "seguimientos" : "todas";
+  const vista: VistaLlamadas =
+    sp.vista === "seguimientos" ||
+    sp.vista === "sin_desenlace" ||
+    sp.vista === "venta_sin_registrar" ||
+    sp.vista === "todas"
+      ? sp.vista
+      : vistaDefault;
+  const filtroResultado = sp.resultado ?? "";
+  const filtroProducto = sp.producto ?? "";
+  const filtroObjecion = sp.objecion ?? "";
+  const filtroCloser = sp.closer ?? "";
+
+  // Pipeline y Lista son modos EXCLUYENTES de la misma sección: solo se pide
+  // al server lo que el modo activo va a mostrar (nada de traer ambos y
+  // descartar la mitad).
+  const [countsRes, listaRows, chipsRes] = await Promise.all([
+    modo === "pipeline"
+      ? supabase.rpc("dashboard_pipeline_llamadas_counts", args)
+      : Promise.resolve({ data: null }),
+    modo === "lista"
+      ? supabase
+          .rpc("dashboard_llamadas_lista", {
+            p_vista: vista,
+            p_resultado: filtroResultado || null,
+            p_producto: filtroProducto || null,
+            p_objecion: filtroObjecion || null,
+            p_closer: filtroCloser || null,
+            p_start: vista === "todas" ? period.startStr : null,
+            p_end: vista === "todas" ? period.endStr : null,
+          })
+          .then((r) => (r.data ?? []) as LlamadaListaRow[])
+      : Promise.resolve<LlamadaListaRow[]>([]),
+    modo === "lista"
+      ? supabase.rpc("dashboard_llamadas_chips").then((r) => r.data?.[0] ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  const c = (countsRes.data?.[0] ?? {}) as Record<string, number | null>;
   const counts: PipelineCounts = {
     programada: Number(c.programada ?? 0),
     pendiente: Number(c.pendiente ?? 0),
@@ -139,116 +93,54 @@ export default async function CloserPage({
     cancelada: Number(c.cancelada ?? 0),
     total: Number(c.total ?? 0),
   };
+  // Recién acá se sabe counts.total (hace falta para cortar el paginado), así
+  // que este fetch no puede ir en el Promise.all de arriba.
+  const rows =
+    modo === "pipeline" ? await fetchAllRpcRows(supabase, "dashboard_pipeline_llamadas", args, counts.total) : [];
 
-  const [rows, metricasRes, metas] = await Promise.all([
-    fetchAllRpcRows(supabase, "dashboard_pipeline_llamadas", args, counts.total),
-    // Agregados propios + comisión (RPC security invoker, filtrado por RLS +
-    // filtro explícito por bookings.closer). Solo se pide si hay algo que
-    // mostrar: para admin ni siquiera se consulta.
-    esCloser
-      ? supabase.rpc("dashboard_closer_metricas", args).then((r) => r.data?.[0] ?? null)
-      : Promise.resolve(null),
-    // Las metas son mensuales: solo aplican si el rango es un mes completo.
-    esCloser && period.esMesCompleto ? loadMetas(supabase, period.mesInicioStr) : Promise.resolve([]),
-  ]);
-
-  const m = (metricasRes ?? {}) as Record<string, number | null>;
-  const llamadas = Number(m.llamadas ?? 0);
-  const atendidas = Number(m.atendidas ?? 0);
-  const resueltas = Number(m.resueltas ?? 0);
-  const showRate = m.show_rate == null ? null : Number(m.show_rate);
-  const ventas = Number(m.ventas ?? 0);
-  const ventasAtribuibles = Number(m.ventas_atribuibles ?? 0);
-  const closeRate = m.close_rate_atendidas == null ? null : Number(m.close_rate_atendidas);
-  const cash = Number(m.cash_collected ?? 0);
-  const pctComision = Number(m.pct_comision ?? 0);
-  const comision = Number(m.comision ?? 0);
-
-  const metaVentas = metas.find((x) => x.metrica === "ventas");
-  const metaCash = metas.find((x) => x.metrica === "cash_collected");
+  const chipsData = (chipsRes ?? {}) as Record<string, number | null>;
+  const chips = {
+    seguimientos_pendientes: Number(chipsData.seguimientos_pendientes ?? 0),
+    sin_desenlace: Number(chipsData.sin_desenlace ?? 0),
+    venta_sin_registrar: Number(chipsData.venta_sin_registrar ?? 0),
+  };
 
   return (
-    <div className="tabular-nums space-y-10">
-      <PageHeader title="Llamadas" period={period} />
+    <div className="tabular-nums space-y-4">
+      <PageHeader title={modo === "pipeline" ? "Pipeline" : "Llamadas"} period={period} />
 
-      {esCloser && (
-        <>
-          <section>
-            <h2 className="section-title mb-3 border-b border-border pb-2">Volumen</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Volumen label="Agendadas" value={llamadas} />
-              <Volumen label="Atendidas" value={atendidas} />
-              <Volumen label="Ventas" value={ventas} />
-            </div>
-          </section>
+      <div className="flex justify-end">
+        <div className="flex gap-1 rounded-full border border-border p-1">
+          {(["lista", "pipeline"] as const).map((m) => (
+            <Link
+              key={m}
+              href={hrefModo(sp, m)}
+              className={`rounded-full px-3 py-1 text-sm transition-colors ${
+                modo === m
+                  ? "bg-[var(--neon-active)] text-primary"
+                  : "text-muted-foreground hover:bg-[var(--surface-elevated)]"
+              }`}
+            >
+              {m === "lista" ? "Lista" : "Pipeline"}
+            </Link>
+          ))}
+        </div>
+      </div>
 
-          <section>
-            <h2 className="section-title mb-3 border-b border-border pb-2">Conversión</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Ratio
-                label="% de asistencia"
-                value={showRate}
-                num={atendidas}
-                den={resueltas}
-                unidad="llamadas resueltas"
-              />
-              <Ratio
-                label="% de cierre"
-                value={closeRate}
-                num={ventasAtribuibles}
-                den={atendidas}
-                unidad="atendidas"
-              />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="section-title mb-3 border-b border-border pb-2">Resultado económico</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-border bg-card p-5 tabular-nums">
-                <div className="micro-label">Cash collected del período</div>
-                <div className="mt-2 font-mono text-3xl leading-none text-foreground">{usd(cash)}</div>
-                <div className="mt-2 font-mono text-xs text-muted-foreground">Plata que entró en el rango.</div>
-              </div>
-              <div className="rounded-lg border border-primary/40 bg-card p-5 tabular-nums">
-                <div className="micro-label">Tu comisión</div>
-                <div className="mt-2 font-mono text-4xl leading-none text-foreground">{usd(comision)}</div>
-                <div className="mt-2 font-mono text-xs text-muted-foreground">
-                  {fmtPct(pctComision)} de {usd(cash)}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Metas: solo con un mes calendario completo, igual que Operaciones. */}
-          {period.esMesCompleto && (
-            <section>
-              <h2 className="section-title mb-3 border-b border-border pb-2">Metas · {period.mesLabel}</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Meta
-                  label="Ventas"
-                  actual={ventas}
-                  objetivo={metaVentas ? Number(metaVentas.objetivo) : null}
-                  fmt={(n) => fmtInt(n)}
-                />
-                <Meta
-                  label="Cash collected"
-                  actual={cash}
-                  objetivo={metaCash ? Number(metaCash.objetivo) : null}
-                  fmt={(n) => usd(n)}
-                />
-              </div>
-            </section>
-          )}
-        </>
-      )}
-
-      <section>
-        {esCloser && (
-          <h2 className="section-title mb-3 border-b border-border pb-2">Pipeline</h2>
-        )}
+      {modo === "lista" ? (
+        <ListaLlamadas
+          rows={listaRows}
+          chips={chips}
+          isAdmin={!esCloser}
+          vista={vista}
+          resultado={filtroResultado}
+          producto={filtroProducto}
+          objecion={filtroObjecion}
+          closerFiltro={filtroCloser}
+        />
+      ) : (
         <PipelineBoard rows={rows as unknown as PipelineRow[]} counts={counts} />
-      </section>
+      )}
     </div>
   );
 }
