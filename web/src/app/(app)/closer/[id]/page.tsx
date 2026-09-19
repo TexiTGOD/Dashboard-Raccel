@@ -175,13 +175,6 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             <Field label="Fecha / hora" mono>{fmtFecha(b.fecha_llamada)}</Field>
             <Field label="Closer" mono>{closerLabel(b.closer)}</Field>
           </div>
-          <Field label="Resumen de Fathom">
-            {call?.resumen_fathom ? (
-              <span className="whitespace-pre-wrap">{call.resumen_fathom}</span>
-            ) : (
-              <span className="text-muted-foreground">Todavía no hay resumen.</span>
-            )}
-          </Field>
           <GrabacionField bookingId={b.id} url={b.grabacion_url ?? null} />
         </Panel>
       </div>
@@ -232,13 +225,20 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             <CuotasPanel bookingId={b.id} moneda={sale.moneda ?? "USD"} cuotas={cuotas} />
           </div>
         ) : (
-          <ManualSaleForm
-            bookingId={b.id}
-            leadId={b.lead_id}
-            defaultEmail={b.email ?? ""}
-            defaultNombre={lead?.nombre ?? b.nombre ?? ""}
-            bookingFutura={bookingFutura}
-          />
+          <>
+            {call?.resultado === "vendido" && (
+              <p className="mb-4 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm text-warning">
+                Marcaste Vendido: cargá la venta acá abajo para que cuente en tu comisión.
+              </p>
+            )}
+            <ManualSaleForm
+              bookingId={b.id}
+              leadId={b.lead_id}
+              defaultEmail={b.email ?? ""}
+              defaultNombre={lead?.nombre ?? b.nombre ?? ""}
+              bookingFutura={bookingFutura}
+            />
+          </>
         )}
       </Panel>
     </div>

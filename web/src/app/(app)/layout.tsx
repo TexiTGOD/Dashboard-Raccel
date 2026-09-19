@@ -1,11 +1,25 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { signOut } from "@/app/actions";
+import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./sidebar-nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
+
+  // Badge de "Llamadas": seguimientos pendientes + ventas sin registrar (las
+  // dos cosas que no se pueden dejar caer — comisión y plata real). Para
+  // closer son las suyas; para admin, el total — es la MISMA columna, la RLS
+  // ya hace la diferencia (current_closer_identifier() vs is_admin()), no hay
+  // lógica de rol acá. Solo se pide para los roles que tienen "Llamadas".
+  let llamadasPendientes = 0;
+  if (profile.rol === "admin" || profile.rol === "closer") {
+    const supabase = await createClient();
+    const { data } = await supabase.rpc("dashboard_llamadas_chips");
+    const d = data?.[0];
+    llamadasPendientes = Number(d?.seguimientos_pendientes ?? 0) + Number(d?.venta_sin_registrar ?? 0);
+  }
 
   return (
     <div className="flex-1 md:flex">
@@ -18,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             Raccel
           </Link>
-          <SidebarNav rol={profile.rol} />
+          <SidebarNav rol={profile.rol} llamadasPendientes={llamadasPendientes} />
           <div className="mt-auto border-t border-border px-3 pt-4">
             <div className="text-sm text-foreground">{profile.nombre}</div>
             <div className="micro-label mb-2">{profile.rol}</div>
@@ -44,7 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </form>
         </div>
         <div className="px-2 pb-2">
-          <SidebarNav rol={profile.rol} horizontal />
+          <SidebarNav rol={profile.rol} horizontal llamadasPendientes={llamadasPendientes} />
         </div>
       </header>
 

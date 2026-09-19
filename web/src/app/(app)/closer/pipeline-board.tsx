@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { fmtFecha, fmtInt } from "@/lib/format";
 import { ESTADOS_BOOKING, type EstadoBooking, type ResultadoCall } from "@/lib/types";
 import { piezaLabel } from "@/lib/pieza";
-import { ResultadoBadge } from "./_components/badges";
+import { ResultadoBadge, SeguimientoBadge } from "./_components/badges";
 import { cambiarEstadoLlamada } from "./actions";
 
 // La clase la calcula la base (dashboard_pipeline_llamadas). Acá solo agrupamos
@@ -23,6 +23,8 @@ export interface PipelineRow {
   resultado: ResultadoCall | null;
   pieza: string | null;
   clase: string;
+  proximo_seguimiento: string | null;
+  es_vencido: boolean;
 }
 
 // Conteos agregados en SQL: son la fuente de verdad de cada columna (no se
@@ -47,11 +49,14 @@ const ESTADO_LABEL: Record<EstadoBooking, string> = {
 };
 
 // Columnas visibles = lo accionable. "Atendida" son las que todavía piden algo:
-// seguimiento, o atendidas sin resultado cargado.
+// seguimiento, o recién atendida sin resultado cargado (dentro del margen).
+// Misma clasificación que la Lista (pipeline_clase_llamada usa
+// es_sin_desenlace()): "Pendiente" exige +2hs desde la llamada, así que una
+// que acaba de terminar todavía cae acá en Programada.
 const COLUMNAS: { key: keyof PipelineCounts; label: string; hint: string }[] = [
-  { key: "programada", label: "Programada", hint: "Agendada, todavía no ocurrió" },
-  { key: "pendiente", label: "Pendiente de desenlace", hint: "Ya pasó y nadie cargó el desenlace" },
-  { key: "atendida", label: "Atendida", hint: "Seguimiento o sin resultado cargado" },
+  { key: "programada", label: "Programada", hint: "Agendada, o recién ocurrida (dentro de las 2hs)" },
+  { key: "pendiente", label: "Pendiente de desenlace", hint: "Pasaron +2hs y nadie cargó el desenlace" },
+  { key: "atendida", label: "Atendida", hint: "Seguimiento, o recién atendida sin resultado" },
 ];
 
 // Archivado = lo terminado. Vendidas y perdidas ya están cerradas: no piden
@@ -88,7 +93,12 @@ function LlamadaCard({
           {r.resultado && r.resultado !== "pendiente" && <ResultadoBadge resultado={r.resultado} />}
         </div>
 
-        <div className="font-mono text-[11px] text-[var(--text-muted)]">{fmtFecha(r.fecha)}</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-mono text-[11px] text-[var(--text-muted)]">{fmtFecha(r.fecha)}</div>
+          {r.resultado === "follow_up" && (
+            <SeguimientoBadge fecha={r.proximo_seguimiento} vencido={r.es_vencido} />
+          )}
+        </div>
 
         {/* Acción visual: mover de columna = cambiar el estado. Sin drag & drop. */}
         <label className="block">

@@ -113,6 +113,29 @@ export interface Call {
   proximo_seguimiento: string | null;
 }
 
+// Vista Lista de /closer: 3 accesos rápidos (dashboard_llamadas_lista/_chips).
+// "seguimientos"/"sin_desenlace" son listas de pendientes, absolutas — NO
+// respetan el rango de fechas de la página (uno vencido de hace 2 meses tiene
+// que seguir viéndose). Solo "todas" respeta desde/hasta.
+export type VistaLlamadas = "seguimientos" | "sin_desenlace" | "venta_sin_registrar" | "todas";
+
+// Fila de dashboard_llamadas_lista. es_vencido ya viene calculado en SQL con
+// hoy_argentina() — nunca se recalcula "hoy" en el cliente (evita el bug de
+// timezone: el server de Next puede correr en UTC).
+export interface LlamadaListaRow {
+  booking_id: string;
+  fecha: string | null;
+  lead_nombre: string | null;
+  closer: string | null;
+  estado: EstadoBooking | null;
+  resultado: ResultadoCall | null;
+  producto_ofrecido: ProductoOfrecido | null;
+  precio_ofrecido: number | null;
+  objeciones: Objecion[] | null;
+  proximo_seguimiento: string | null;
+  es_vencido: boolean;
+}
+
 export type TipoVenta = "nueva" | "recompra" | "upsell" | "backend";
 
 export interface Sale {
