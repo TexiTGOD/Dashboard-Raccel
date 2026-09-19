@@ -2,12 +2,20 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { EstadoBooking, MetodoPago, ResultadoCall } from "@/lib/types";
+import type {
+  DolorPrincipal,
+  EstadoBooking,
+  MetodoPago,
+  Objecion,
+  ProductoOfrecido,
+  ResultadoCall,
+} from "@/lib/types";
 
 type Result = { ok: true } | { error: string };
 
-// Guarda el desenlace de una llamada: estado del booking + resultado/notas de la
-// call. La RLS garantiza que solo se pueda tocar un booking propio.
+// Guarda el desenlace de una llamada: estado del booking + todo lo de la call
+// (resultado, notas, producto/precio ofrecido, dolor, objeciones, próximo
+// seguimiento). La RLS garantiza que solo se pueda tocar un booking propio.
 export async function saveCallOutcome(input: {
   bookingId: string;
   estado: EstadoBooking;
@@ -15,6 +23,14 @@ export async function saveCallOutcome(input: {
   notas: string;
   /** Criterio del closer. null = sin marcar. Va junto con el desenlace. */
   calificado: boolean | null;
+  productoOfrecido: ProductoOfrecido | null;
+  precioOfrecido: number | null;
+  dolorPrincipal: DolorPrincipal | null;
+  dolorExtra: string;
+  objeciones: Objecion[];
+  objecionesExtra: string;
+  /** Se ignora (se guarda null) si resultado !== "follow_up" — sin fechas fantasma. */
+  proximoSeguimiento: string | null;
 }): Promise<Result> {
   const supabase = await createClient();
   const {
@@ -31,6 +47,23 @@ export async function saveCallOutcome(input: {
     .eq("id", input.bookingId);
   if (bErr) return { error: bErr.message };
 
+  // Defensa en profundidad: aunque el form ya limpia el campo al cambiar de
+  // resultado, la fuente de verdad de "no hay fecha fantasma" es esto + el
+  // constraint calls_seguimiento_solo_follow_up en la base.
+  const proximoSeguimiento = input.resultado === "follow_up" ? input.proximoSeguimiento || null : null;
+
+  const patch = {
+    resultado: input.resultado,
+    notas_closer: input.notas,
+    producto_ofrecido: input.productoOfrecido,
+    precio_ofrecido: input.precioOfrecido,
+    dolor_principal: input.dolorPrincipal,
+    dolor_extra: input.dolorExtra || null,
+    objeciones: input.objeciones.length > 0 ? input.objeciones : null,
+    objeciones_extra: input.objecionesExtra || null,
+    proximo_seguimiento: proximoSeguimiento,
+  };
+
   // calls no tiene unique por booking_id: buscamos y update o insert.
   const { data: existing } = await supabase
     .from("calls")
@@ -40,19 +73,10 @@ export async function saveCallOutcome(input: {
     .maybeSingle();
 
   if (existing) {
-    const { error } = await supabase
-      .from("calls")
-      .update({ resultado: input.resultado, notas_closer: input.notas })
-      .eq("id", existing.id);
+    const { error } = await supabase.from("calls").update(patch).eq("id", existing.id);
     if (error) return { error: error.message };
   } else {
-    const { error } = await supabase
-      .from("calls")
-      .insert({
-        booking_id: input.bookingId,
-        resultado: input.resultado,
-        notas_closer: input.notas,
-      });
+    const { error } = await supabase.from("calls").insert({ booking_id: input.bookingId, ...patch });
     if (error) return { error: error.message };
   }
 

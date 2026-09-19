@@ -89,14 +89,28 @@ export interface Booking {
   lead_id: string | null;
 }
 
+export type ProductoOfrecido = "Volver a Sentir-Me" | "Volver a Sentir-Me | Autoguiado";
+export type DolorPrincipal = "intimidad_sin_eleccion" | "comparacion_otra" | "darlo_todo_no_elegida";
+export type Objecion = "plata" | "hablar_pareja" | "no_es_momento" | "lo_voy_a_pensar" | "no_tengo_tiempo";
+
 export interface Call {
   id: string;
   booking_id: string | null;
   resumen_fathom: string | null;
+  // Muerto por ahora (queda para cuando se integre Fathom): no se lee ni se
+  // escribe desde ningún lado del frontend todavía. No borrar.
   transcript_url: string | null;
   notas_closer: string | null;
   resultado: ResultadoCall;
   fecha: string | null;
+  producto_ofrecido: ProductoOfrecido | null;
+  precio_ofrecido: number | null;
+  dolor_principal: DolorPrincipal | null;
+  dolor_extra: string | null;
+  objeciones: Objecion[] | null;
+  objeciones_extra: string | null;
+  /** Solo tiene sentido (y la base solo lo permite) con resultado = "follow_up". */
+  proximo_seguimiento: string | null;
 }
 
 export type TipoVenta = "nueva" | "recompra" | "upsell" | "backend";
