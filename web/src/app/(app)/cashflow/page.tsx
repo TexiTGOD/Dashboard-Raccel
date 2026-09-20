@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodFromParams, ymd, todayUTC } from "@/lib/period";
+import { periodFromParams, ymd, todayAR } from "@/lib/period";
 import { loadKpis, loadGastos } from "@/lib/dashboard";
 import { fmtMonto } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +32,7 @@ export default async function CashflowPage({
   ).sort((a, b) => b[1] - a[1]);
 
   // La fecha de alta por defecto cae dentro del rango visto (para que el gasto aparezca).
-  const hoy = ymd(todayUTC());
+  const hoy = ymd(todayAR());
   const defaultFecha = hoy < period.desde ? period.desde : hoy > period.hasta ? period.hasta : hoy;
 
   return (

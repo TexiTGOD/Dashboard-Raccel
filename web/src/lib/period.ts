@@ -1,3 +1,5 @@
+import { hoyArg } from "@/lib/format";
+
 // Manejo del período del dashboard: un RANGO de fechas [desde, hasta] (inclusive).
 // Las métricas de conteo/plata corren sobre el rango (RPC con [p_start, p_end)).
 // Metas y ritmo son MENSUALES: solo aplican cuando el rango es un mes calendario
@@ -32,11 +34,11 @@ const monthEndExcl = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTC
 const sameMonth = (a: Date, b: Date) =>
   a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
 
-// "Hoy" tomado de la fecha local pero fijado a medianoche UTC, para que las
-// comparaciones de fecha no se corran por timezone.
-export function todayUTC(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()));
+// "Hoy" en ARGENTINA (no el día del servidor, que en Vercel es UTC y entre las 21:00
+// y las 24:00 ya es "mañana"), fijado a medianoche UTC para que las comparaciones
+// de fecha no se corran por timezone.
+export function todayAR(): Date {
+  return parseYmd(hoyArg());
 }
 
 const MESES = [
@@ -51,7 +53,7 @@ function buildPeriod(desdeD: Date, hastaD: Date): Period {
   const ms = monthStart(desdeD);
   const meExcl = monthEndExcl(desdeD);
   const esMesCompleto = ymd(desdeD) === ymd(ms) && ymd(endExcl) === ymd(meExcl);
-  const today = todayUTC();
+  const today = todayAR();
   const isCurrent = esMesCompleto && ymd(ms) === ymd(monthStart(today));
   const daysLeft = isCurrent
     ? Math.max(Math.round((meExcl.getTime() - today.getTime()) / 86400000), 0)
@@ -88,7 +90,7 @@ export function periodFromParams(sp: { desde?: string; hasta?: string; periodo?:
     return buildPeriod(new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 0)));
   }
   // Default: mes en curso.
-  const t = todayUTC();
+  const t = todayAR();
   return buildPeriod(monthStart(t), addDays(monthEndExcl(t), -1));
 }
 
@@ -101,7 +103,7 @@ export interface Preset {
 
 // Presets tipo sitios de vuelos. Todos en fechas cerradas [desde, hasta].
 export function presets(): Preset[] {
-  const t = todayUTC();
+  const t = todayAR();
   const y = t.getUTCFullYear();
   const m = t.getUTCMonth();
   const q = Math.floor(m / 3) * 3;

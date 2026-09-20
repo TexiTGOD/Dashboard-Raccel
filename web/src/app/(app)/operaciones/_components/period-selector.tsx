@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ymd, parseYmd, presets, type Period } from "@/lib/period";
+import { hoyArg } from "@/lib/format";
 
 const WEEKDAYS = ["lu", "ma", "mi", "ju", "vi", "sá", "do"];
 const MESES = [
@@ -31,8 +32,7 @@ function MonthGrid({
   const first = new Date(Date.UTC(y, m, 1));
   const offset = (first.getUTCDay() + 6) % 7; // lunes primero
   const dias = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  const n = new Date();
-  const hoy = ymd(new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())));
+  const hoy = hoyArg(); // día Argentino, no el de la zona del browser
 
   const cells: (Date | null)[] = [];
   for (let i = 0; i < offset; i++) cells.push(null);

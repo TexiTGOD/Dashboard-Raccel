@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fmtFecha, fmtInt, fmtMonto, fmtPct } from "@/lib/format";
+import { diaArg, fmtFecha, fmtInt, fmtMonto, fmtPct, instanteDeDiaArg } from "@/lib/format";
 import {
   DOLOR_LABEL,
   CONCIENCIA_LABEL,
@@ -70,15 +70,17 @@ function fmtCell(v: unknown, type: ColType): string {
 function toRaw(v: unknown, kind: EditKind): string {
   if (v == null) return "";
   if (kind === "date") {
-    const d = new Date(String(v));
-    return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    return diaArg(String(v)); // día ARGENTINO del instante, no el UTC
   }
   return String(v);
 }
 
 async function saveEdit(spec: EditSpec, id: string, raw: string) {
+  // Un input type=date da un DÍA; la columna es timestamptz. Si se manda "2026-09-21"
+  // pelado, la base lo toma como medianoche UTC (= 21:00 del día anterior en
+  // Argentina). instanteDeDiaArg lo ubica en el día Argentino elegido.
   const value: string | number | null =
-    raw === "" ? null : NUMERIC.has(spec.field) ? Number(raw) : raw;
+    raw === "" ? null : NUMERIC.has(spec.field) ? Number(raw) : spec.kind === "date" ? instanteDeDiaArg(raw) : raw;
   switch (spec.entity) {
     case "lead": return updateLead({ leadId: id, patch: { [spec.field]: value } });
     case "booking": return updateBooking({ bookingId: id, patch: { [spec.field]: value } });
@@ -562,7 +564,7 @@ const TIPOS_PIEZA = [
   { value: "historias", label: CATEGORIA_LABEL.historias },
 ];
 
-const soloFecha = (v: unknown) => String(v ?? "").slice(0, 10); // ISO -> YYYY-MM-DD
+const soloFecha = (v: unknown) => diaArg(String(v ?? "")); // instante -> YYYY-MM-DD (día Argentina)
 
 /** Barra de filtros del box de Leads (client-side, sobre las filas del mes). */
 function FiltrosLeads({
